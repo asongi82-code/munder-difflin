@@ -78,6 +78,24 @@ interface Runtime {
   busySince?: number;
 }
 
+/** kaltela 사무실 정보 표시 (PRD 4-1 / 「8. 개발 순서」 6번). Mirrors the main
+ *  process's KaltelaOfficeSnapshot (src/main/kaltelaOffice.ts) — declared again
+ *  here rather than imported, since this file is renderer-side. */
+interface KaltelaWeekCardLike {
+  title: string;
+  dayLabel: string;
+  isAd: boolean;
+  state: 'done' | 'doing' | 'scheduled';
+  stageLabel?: string;
+}
+interface KaltelaOfficeSnapshotLike {
+  connected: boolean;
+  stageIndex: number | null;
+  followerCount: number | null;
+  todayLabel: string;
+  week: KaltelaWeekCardLike[];
+}
+
 /** Only a busy stretch at least this long earns a cheer on finishing. Short
  *  turns (an inbox nudge, a heartbeat reply) end quietly — otherwise idle
  *  agents "celebrate" every few minutes over nothing, and the "done!" bubble
@@ -377,6 +395,168 @@ export function OfficeFloor() {
       }
       calG.rect(8, 11, 2, 2).fill(0xc94f4f);                  // today, circled red
       charLayer.addChild(calG);
+
+      // ─── PRD 4-1 「앱이 글씨를 그리는 자리」 (「8. 개발 순서」 6번) ─────────────
+      // 책상 이름표 6개 + 편집장실 체크리스트 + 대표 모니터 팔로워 수 + 오른쪽
+      // 보드(오늘 날짜·이번 주 연재)를 배경 위에 그린다. 이름표/단계 이름은
+      // 설정값(없으면 기본값), 체크리스트 현재 단계·팔로워 수·주간 일정은
+      // 노션에서 읽는다 — 못 읽으면 지어내지 않고 '—'로 둔다. 새 Container를
+      // world의 맨 뒤(= 맨 위)에 붙여서 캐릭터 레이어보다 항상 위에 그린다.
+      if (theme.id === 'kaltela') {
+        const officeCfg = await window.cth.getConfig();
+        if (mountIdRef.current !== mountId) { safeDestroy(app); return; }
+        const overlay = new Container();
+        world.addChild(overlay);
+
+        const INK = 0x6e5252;
+        const FADED = 0x9a8a84;
+        const textStyle = (size: number, weight: '600' | '700', fill: number, extra?: Record<string, unknown>) => ({
+          fontSize: size, fontWeight: weight, fill, fontFamily: 'Pretendard, sans-serif', ...extra
+        });
+
+        const deskNames = {
+          editor: officeCfg.kaltelaDeskNames?.editor || '편집장',
+          researcher: officeCfg.kaltelaDeskNames?.researcher || '리서처',
+          writer: officeCfg.kaltelaDeskNames?.writer || '스토리 작가',
+          analyst: officeCfg.kaltelaDeskNames?.analyst || '성과 분석가',
+          sales: officeCfg.kaltelaDeskNames?.sales || '영업사원',
+          director: officeCfg.kaltelaDeskNames?.director || '연출 담당'
+        };
+        const stageNames = officeCfg.kaltelaStageNames?.length === 6
+          ? officeCfg.kaltelaStageNames
+          : ['리서치', '대본작성', '대본최종', '연출', '성과분석', '영업관리'];
+
+        const plate = (x0: number, y0: number, x1: number, y1: number, label: string) => {
+          const txt = new Text({ text: label, style: textStyle(16.5, '700', INK, { align: 'center' }) });
+          txt.anchor.set(0.5);
+          txt.position.set((x0 + x1), (y0 + y1)); // native-coord midpoint × 2 (world units)
+          overlay.addChild(txt);
+        };
+        plate(238, 83, 337, 103, deskNames.editor);
+        plate(33, 177, 100, 196, deskNames.researcher);
+        plate(122, 177, 189, 196, deskNames.writer);
+        plate(293, 177, 360, 196, deskNames.analyst);
+        plate(379, 177, 446, 196, deskNames.sales);
+        plate(33, 259, 100, 278, deskNames.director);
+
+        // 편집장실 체크리스트 — office_bg.png에 이미 그려진 흰 판(PRD 좌표
+        // 151,17~225,109) 안에 글씨만 얹는다. 패널을 따로 그리면(이전 시도)
+        // 그림 속 진짜 판과 겹쳐 두 개로 보이고, 화면 가운데로 옮기면 편집장
+        // 책상을 가리게 된다 — 그래서 패널은 그대로 두고 PRD 좌표에 맞춘다.
+        const CHECKLIST_PAD = 8;
+        const checklistX = 151 * 2;
+        const checklistY = 17 * 2;
+        const checklistW = (225 - 151) * 2;
+        const rowH = ((109 - 17) * 2) / 6;
+        const stageLabels: Text[] = [];
+        const stageMarks: Graphics[] = [];
+        for (let i = 0; i < 6; i++) {
+          const rowY = checklistY + i * rowH;
+          const mark = new Graphics();
+          mark.position.set(checklistX + CHECKLIST_PAD, rowY + rowH / 2 - 4);
+          overlay.addChild(mark);
+          stageMarks.push(mark);
+          const label = new Text({
+            text: stageNames[i] ?? '',
+            style: textStyle(13.5, '700', INK, { wordWrap: true, wordWrapWidth: checklistW - CHECKLIST_PAD * 2 - 14 })
+          });
+          label.position.set(checklistX + CHECKLIST_PAD + 14, rowY + rowH / 2 - 8);
+          overlay.addChild(label);
+          stageLabels.push(label);
+        }
+        const paintChecklist = (stageIndex: number | null) => {
+          for (let i = 0; i < 6; i++) {
+            const mark = stageMarks[i];
+            mark.clear();
+            const label = stageLabels[i];
+            if (stageIndex == null) {
+              mark.rect(0, 0, 8, 8).stroke({ width: 1, color: 0xc9b8b0 });
+              label.style.fill = FADED;
+              label.alpha = 0.7;
+            } else if (i < stageIndex) {
+              mark.rect(0, 0, 8, 8).fill(0xfbd9df);
+              label.style.fill = FADED;
+              label.alpha = 0.6;
+            } else if (i === stageIndex) {
+              mark.rect(0, 0, 8, 8).fill(0xf7a8b0);
+              label.style.fill = 0x4a2a2e;
+              label.alpha = 1;
+            } else {
+              mark.rect(0, 0, 8, 8).stroke({ width: 1, color: 0xc9b8b0 });
+              label.style.fill = FADED;
+              label.alpha = 0.7;
+            }
+          }
+        };
+        paintChecklist(null);
+
+        // 대표 모니터 — 205,225 ~ 298,264 (×2), 팔로워 수
+        const monitorText = new Text({ text: '—', style: textStyle(20, '700', 0xfffaf0, { align: 'center' }) });
+        monitorText.anchor.set(0.5);
+        monitorText.position.set(205 + 298, 225 + 264);
+        overlay.addChild(monitorText);
+
+        // 오른쪽 보드 — 379,225 ~ 459,274 (×2), 오늘 날짜 + 이번 주 연재
+        const boardX0 = 379 * 2;
+        const boardY0 = 225 * 2;
+        const boardX1 = 459 * 2;
+        const todayText = new Text({ text: '—', style: textStyle(12, '700', INK, { align: 'right' }) });
+        todayText.anchor.set(1, 0);
+        todayText.position.set(boardX1 - 4, boardY0 + 3);
+        overlay.addChild(todayText);
+        const boardTitle = new Text({ text: '이번 주 연재', style: textStyle(13.5, '700', INK) });
+        boardTitle.position.set(boardX0 + 4, boardY0 + 3);
+        overlay.addChild(boardTitle);
+        const weekLines: Text[] = [];
+        for (let i = 0; i < 4; i++) {
+          const line = new Text({
+            text: '',
+            style: textStyle(12, '700', INK, { wordWrap: true, wordWrapWidth: (boardX1 - boardX0) - 8 })
+          });
+          line.position.set(boardX0 + 4, boardY0 + 25 + i * 15);
+          overlay.addChild(line);
+          weekLines.push(line);
+        }
+
+        const applyOfficeSnapshot = (snap: KaltelaOfficeSnapshotLike | null): void => {
+          if (!snap) {
+            paintChecklist(null);
+            monitorText.text = '—';
+            todayText.text = '—';
+            for (const l of weekLines) l.text = '';
+            return;
+          }
+          paintChecklist(snap.stageIndex);
+          monitorText.text = snap.followerCount != null ? `${snap.followerCount.toLocaleString()}명 팔로워` : '—';
+          todayText.text = snap.todayLabel;
+          if (snap.week.length === 0) {
+            weekLines[0].text = '미정';
+            weekLines[0].style.fill = INK;
+            for (let i = 1; i < weekLines.length; i++) weekLines[i].text = '';
+          } else {
+            for (let i = 0; i < weekLines.length; i++) {
+              const card = snap.week[i];
+              if (!card) { weekLines[i].text = ''; continue; }
+              const mark = card.state === 'done' ? '✓' : card.state === 'doing' ? '▶' : '·';
+              const adTag = card.isAd ? '[광고] ' : '';
+              const stageSuffix = card.stageLabel ? ` · ${card.stageLabel}` : '';
+              weekLines[i].text = `${mark} ${card.dayLabel} ${adTag}${card.title}${stageSuffix}`;
+              weekLines[i].style.fill = card.state === 'done' ? FADED : card.isAd ? 0xc97a4a : INK;
+            }
+          }
+        };
+
+        const refreshOfficeData = async (): Promise<void> => {
+          try {
+            const raw = await window.cth.getKaltelaOfficeData();
+            if (mountIdRef.current !== mountId) return;
+            applyOfficeSnapshot(raw as KaltelaOfficeSnapshotLike | null);
+          } catch { /* keep the last drawing */ }
+        };
+        void refreshOfficeData();
+        const officeDataPoll = setInterval(() => { void refreshOfficeData(); }, 60_000);
+        (app as any).__kaltelaOfficePoll = officeDataPoll;
+      }
 
       // Build the ordered seat list once: PC desks + named desks first, then
       // conference-room chairs as overflow. Each agent claims one and stays there;
@@ -1832,6 +2012,7 @@ export function OfficeFloor() {
         try { (a as any).__unsub?.(); } catch { /* noop */ }
         try { (a as any).__offMessage?.(); } catch { /* noop */ }
         try { clearInterval((a as any).__taskBoardPoll); } catch { /* noop */ }
+        try { clearInterval((a as any).__kaltelaOfficePoll); } catch { /* noop */ }
         safeDestroy(a);
       }
       appRef.current = null;

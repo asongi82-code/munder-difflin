@@ -126,6 +126,17 @@ export interface HarnessConfig {
   /** Active office map/cast theme. The five TV-show skins are honored only when
    *  tvShowOffices is on; 'kaltela' (this fork's own office) always is — see App.tsx. */
   officeTheme?: 'office' | 'kaltela' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
+  /** kaltela 오피스 책상 이름표 6개 (PRD 4-1). Mirrors src/main/config.ts. */
+  kaltelaDeskNames?: {
+    editor?: string; researcher?: string; writer?: string;
+    analyst?: string; sales?: string; director?: string;
+  };
+  /** kaltela 편집장실 체크리스트 진행 단계 이름 6개, 순서대로. Mirrors src/main/config.ts. */
+  kaltelaStageNames?: string[];
+  /** 「칼테라 에피소드 보드」 노션 DB id. Mirrors src/main/config.ts. */
+  kaltelaNotionEpisodeBoardId?: string;
+  /** 「인스타 팔로워 기록」 노션 DB id. Mirrors src/main/config.ts. */
+  kaltelaNotionFollowerDbId?: string;
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn. API KEYS are NOT stored here —
    *  they live write-only in the secret broker. */

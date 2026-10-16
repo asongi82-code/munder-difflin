@@ -61,6 +61,7 @@ import type { SpawnFailReason } from './analytics';
 import { IntegrationBroker } from './integrationBroker';
 import * as integrations from './integrations';
 import { validateBaseUrl, buildAuthHeaders, resolveUpstreamUrl, secretRefFor, INTEGRATION_TEMPLATES } from '../shared/integrations';
+import { getKaltelaOfficeSnapshot } from './kaltelaOffice';
 import { RosterStore } from './roster';
 import { buildWorkerLaunch } from './workerLaunch';
 import { ControlRegistry } from './control';
@@ -3195,6 +3196,12 @@ ipcMain.handle('integrations:test', async (_evt, payload: unknown) => {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 });
+
+// ─── IPC: kaltela office display (PRD.md 「8. 개발 순서」 6번) ────────────────
+// Reads the episode-board + follower-record notion DBs through the same
+// 'notion' integration record Settings → Connections already manages — no
+// new secret storage. Cached main-side; see kaltelaOffice.ts for fallback.
+ipcMain.handle('kaltela:officeData', () => getKaltelaOfficeSnapshot());
 
 // ─── IPC: config ────────────────────────────────────────────────────────────
 ipcMain.handle('config:get', (): HarnessConfig => readConfig());

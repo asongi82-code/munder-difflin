@@ -18,6 +18,7 @@ import { SettingsHeroCard } from './SettingsHeroCard';
 import { SetupPanel } from './SetupPanel';
 import { Icon } from './Icon';
 import { OfficeThemePicker } from './OfficeThemePicker';
+import { KaltelaOfficeSettings } from './KaltelaOfficeSettings';
 import { McpDefaultsSettings } from './McpDefaultsSettings';
 import { IntegrationsRegistry } from './IntegrationsRegistry';
 import { AiEnginesSettings } from './AiEnginesSettings';
@@ -1184,6 +1185,12 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
 
                       {/* Office Theme — TV-show office maps (experimental; flag tvShowOffices, default off) */}
                       <OfficeThemePicker config={config} />
+
+                      <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
+
+                      {/* kaltela 오피스 글씨 (책상 이름표·체크리스트 단계) + 노션 DB id
+                          — PRD.md 「8. 개발 순서」 6번 */}
+                      <KaltelaOfficeSettings config={config} />
                     </>
                   )}
 

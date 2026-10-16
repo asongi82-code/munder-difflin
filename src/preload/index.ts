@@ -326,6 +326,17 @@ export interface HarnessConfig {
   /** Active office map/cast theme. The five TV-show skins are honored only when
    *  tvShowOffices is on; 'kaltela' (this fork's own office) always is. */
   officeTheme?: 'office' | 'kaltela' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
+  /** kaltela 오피스 책상 이름표 6개 (PRD 4-1). Mirrors main + renderer HarnessConfig. */
+  kaltelaDeskNames?: {
+    editor?: string; researcher?: string; writer?: string;
+    analyst?: string; sales?: string; director?: string;
+  };
+  /** kaltela 편집장실 체크리스트 진행 단계 이름 6개, 순서대로. */
+  kaltelaStageNames?: string[];
+  /** 「칼테라 에피소드 보드」 노션 DB id. */
+  kaltelaNotionEpisodeBoardId?: string;
+  /** 「인스타 팔로워 기록」 노션 DB id. */
+  kaltelaNotionFollowerDbId?: string;
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn. API KEYS are NOT stored here —
    *  they live write-only in the secret broker. */
@@ -762,6 +773,9 @@ const api = {
     ipcRenderer.invoke('hive:setAgentHold', id, hold),
   hiveBoard: (): Promise<string> => ipcRenderer.invoke('hive:board'),
   hiveTasks: (): Promise<unknown> => ipcRenderer.invoke('hive:tasks'),
+  /** kaltela 오피스 체크리스트/모니터/보드용 노션 스냅샷 (PRD 8번). 토큰/DB id가
+   *  없거나 요청이 실패하면 해당 값이 null인 스냅샷을 돌려준다. */
+  getKaltelaOfficeData: (): Promise<unknown> => ipcRenderer.invoke('kaltela:officeData'),
   hiveLog: (n?: number): Promise<unknown[]> => ipcRenderer.invoke('hive:log', n ?? 200),
   hiveMemory: (id: string): Promise<string> => ipcRenderer.invoke('hive:memory', id),
   hiveInbox: (id: string): Promise<HiveMessage[]> => ipcRenderer.invoke('hive:inbox', id),

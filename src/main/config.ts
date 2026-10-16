@@ -319,6 +319,19 @@ export interface HarnessConfig {
    *  own office) always is — see renderer App.tsx. Unbuilt show themes fall
    *  back to 'office' in the loader. */
   officeTheme?: 'office' | 'kaltela' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
+  /** kaltela 오피스 책상 이름표 6개 (PRD 4-1). 비워 두면 기본 직함을 쓴다. */
+  kaltelaDeskNames?: {
+    editor?: string; researcher?: string; writer?: string;
+    analyst?: string; sales?: string; director?: string;
+  };
+  /** kaltela 편집장실 체크리스트의 진행 단계 이름 6개, 순서대로 (PRD 4-1). */
+  kaltelaStageNames?: string[];
+  /** 「칼테라 에피소드 보드」 노션 DB id — 체크리스트 현재 단계 + 오른쪽 보드의
+   *  이번 주 연재 일정을 읽어오는 데 쓴다. 토큰은 여기 없다 — Settings →
+   *  Connections에 등록한 'notion' 연결의 저장된 시크릿을 쓴다. */
+  kaltelaNotionEpisodeBoardId?: string;
+  /** 「인스타 팔로워 기록」 노션 DB id — 대표 모니터의 팔로워 수를 읽어온다. */
+  kaltelaNotionFollowerDbId?: string;
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn (config-injection or proxy
    *  upstream). API KEYS are NOT stored here — they live write-only in the secret
