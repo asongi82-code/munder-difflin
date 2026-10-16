@@ -149,6 +149,48 @@ export const MCP_CATALOG: McpCatalogEntry[] = [
     spec: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-brave-search'], env: { BRAVE_API_KEY: '' } },
     tier: 'secret',
     defaultEnabled: false
+  },
+
+  // ─── 칼테라 오피스 (Kaltela Office) — per-role integrations ──────────────
+  // These three exist so a HIRE can list only the ids it needs in its
+  // `mcpServers` allow-list (see AgentMeta.mcpServers in hive.ts) instead of
+  // every agent sharing one global switch. Still OFF by default and
+  // consent-gated like any other 'secret' entry — adding an id to a hire's
+  // allow-list is necessary but not sufficient; the human still enables the
+  // underlying server once (supplies the token) in settings.
+  {
+    id: 'notion',
+    label: 'Notion',
+    description: '칼테라 노션 DB(에피소드 보드, 주간 리포트, 광고 문의 기록) 읽기/쓰기. Requires a Notion internal integration token scoped to those DBs only.',
+    // Official Notion MCP server. // TODO-verify package name/version at install time.
+    spec: { command: 'npx', args: ['-y', '@notionhq/notion-mcp-server'], env: { NOTION_TOKEN: '' } },
+    tier: 'secret',
+    defaultEnabled: false
+  },
+  {
+    id: 'metricool',
+    label: 'Metricool',
+    description: '인스타 게시물 성과 지표(조회수·도달·좋아요 등) 조회. Requires a Metricool user token + blog id.',
+    // No verified community stdio server as of writing — Metricool's own MCP may
+    // be a remote/HTTP connector rather than an npx stdio server like the rest of
+    // this catalog. // TODO-verify transport once Metricool's official MCP ships;
+    // placeholder keeps the catalog entry's shape consistent with the others.
+    spec: { command: 'npx', args: ['-y', '@metricool/mcp-server'], env: { METRICOOL_USER_TOKEN: '', METRICOOL_BLOG_ID: '' } },
+    tier: 'secret',
+    defaultEnabled: false
+  },
+  {
+    id: 'gmail-readonly',
+    label: 'Gmail (읽기 전용)',
+    description: '"칼테라 광고" 라벨 메일만 읽기. Requires a Google OAuth token. The server itself can send/delete — pair this id with `mcpDenyTools` (e.g. deny `mcp__munder-gmail-readonly__send_message`) on the hire so only reading is actually possible.',
+    // Same underlying package as 'email-calendar'; kept as a separate catalog id
+    // so a hire can request Gmail without also getting Calendar, and so the
+    // description/consent UI is specific to the read-only intent.
+    // TODO-verify provider package (Gmail/Google Calendar assumed) and confirm it
+    // can be scoped to one label via GMAIL_LABEL_NAME or an equivalent filter.
+    spec: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-gsuite'], env: { GOOGLE_OAUTH_TOKEN: '', GMAIL_LABEL_NAME: '' } },
+    tier: 'secret',
+    defaultEnabled: false
   }
 ];
 

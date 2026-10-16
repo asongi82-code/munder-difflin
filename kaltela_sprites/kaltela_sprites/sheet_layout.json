@@ -1,0 +1,40 @@
+{
+  "frame_width": 32,
+  "frame_height": 48,
+  "columns": 4,
+  "rows": {
+    "front": {
+      "row": 0,
+      "frames": 1
+    },
+    "back": {
+      "row": 1,
+      "frames": 1
+    },
+    "side_right": {
+      "row": 2,
+      "frames": 1
+    },
+    "side_left": {
+      "row": 3,
+      "frames": 1
+    },
+    "front_walk": {
+      "row": 4,
+      "frames": 4
+    },
+    "back_walk": {
+      "row": 5,
+      "frames": 4
+    },
+    "side_walk_right": {
+      "row": 6,
+      "frames": 4
+    },
+    "side_walk_left": {
+      "row": 7,
+      "frames": 4
+    }
+  },
+  "walk_fps": 6
+}

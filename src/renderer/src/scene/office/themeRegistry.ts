@@ -28,11 +28,16 @@ import interiorsUrl from '@/assets/tilesets/interiors.png?url';
 // .tmj is Tiled JSON; imported as raw text and parsed by the loader.
 import officeMapRaw from '@/assets/maps/office.tmj?raw';
 import brooklyn99MapRaw from '@/assets/maps/brooklyn99.tmj?raw';
+import kaltelaMapRaw from '@/assets/maps/kaltela.tmj?raw';
+import kaltelaBgUrl from '@/assets/office/office_bg.png?url';
+import { KALTELA_CAST_BY_NAME, getKaltelaCastFrames, KALTELA_DEFAULT_CHARACTER } from './kaltelaCast';
 
-/** Theme identifiers. Only `office` exists in Phase 0; the five TV-show themes
- *  (friends, brooklyn99, siliconvalley, got, hogwarts) land in later phases. */
+/** Theme identifiers. 'office' and 'kaltela' (this fork's own office, PRD 4-1)
+ *  are real; the five TV-show themes (friends, brooklyn99, siliconvalley, got,
+ *  hogwarts) land in later phases of that separate feature. */
 export type ThemeId =
   | 'office'
+  | 'kaltela'
   | 'friends'
   | 'brooklyn99'
   | 'siliconvalley'
@@ -100,6 +105,11 @@ export interface AnchorConfig {
   calendar: Tile;
   boards: Tile;
   clock: Tile;
+  /** Where the ASK ME board hangs. Omitted = OfficeFloor's own hardcoded
+   *  office-wall position (the right wall run, office theme only) — a theme
+   *  whose floor isn't that tileset (kaltela) must set this explicitly or the
+   *  board lands wherever that hardcoded tile happens to fall on its art. */
+  askBoard?: Tile;
 }
 
 /** Theme palette. `background` is the canvas clear color; `noteColors` are the
@@ -137,6 +147,30 @@ export interface ThemeConfig {
   monitor: MonitorConfig;
   palette: PaletteConfig;
   cast: ThemeCast;
+  /** A raster image drawn beneath every tile/character layer, at its own
+   *  native pixel size (independent of tileSize) — for a theme whose floor is
+   *  one hand-drawn picture (kaltela) rather than a tileset. Omitted for every
+   *  tile-based theme (office, brooklyn99, …). */
+  backgroundImage?: { url: string; width: number; height: number };
+  /** Per-seat sprite scale override, keyed by spawn-point name (PRD 5장 「크기
+   *  비율」: kaltela staff render bigger than the office default, and the
+   *  desk-ceo seat bigger again). A seat not listed, or a theme that omits
+   *  this entirely, uses CharacterSprite's own default scale. */
+  seatScale?: Record<string, number>;
+  /** Walk animation rate (real frames/sec) for every seated agent in this
+   *  theme, passed straight to CharacterSprite. Omitted = CharacterSprite's
+   *  own ~9fps default (office, brooklyn99, …). kaltela's sheet_layout.json
+   *  specifies 6. */
+  castWalkFps?: number;
+  /** Seated leg/back crop override, in the cast sheet's own native pixels —
+   *  see Character.ts's SEAT_LEG_CROP/SEAT_BACK_CROP (tuned for a 32px-tall
+   *  native frame). Omitted = those office-tuned defaults. */
+  castSeatLegCrop?: number;
+  castSeatBackCrop?: number;
+  /** Extra px the thought bubble lifts above its own built-in headroom — see
+   *  Character.ts's CharacterOptions.bubbleHeadroom. Omitted = 0 (office,
+   *  brooklyn99, …, whose ~32px-tall native frame ThoughtBubble is tuned for). */
+  castBubbleHeadroom?: number;
 }
 
 /** The existing office, expressed as a theme. Values are copied verbatim from
@@ -285,11 +319,102 @@ export const BROOKLYN99_THEME: ThemeConfig = {
   cast: OFFICE_THEME.cast,
 };
 
+/** 칼테라 오피스 — this fork's own office (「칼테라 오피스 PRD」 4·5·7장). The
+ *  floor is drawn from office_bg.png (one hand-drawn 480×320 picture, laid
+ *  down at 2× = 960×640) rather than a tileset, so `tilesets` is empty and the
+ *  real art comes from `backgroundImage` (rendered by OfficeFloor beneath the
+ *  tile/character layers). kaltela.tmj supplies only what the engine still
+ *  needs from a .tmj: a collision grid + the 6 named desk seats. No café/coffee
+ *  economy, no idle errands — PRD doesn't call for them, and office_bg.png's
+ *  plants/window/whiteboard are already static set dressing, not interactive
+ *  props. Desk nameplates, the progress checklist, the follower-count monitor
+ *  and the weekly board (PRD 4-1's "앱이 글씨를 그리는 자리") are NOT drawn yet —
+ *  that's 「8. 개발 순서」 step 6, not this step. */
+export const KALTELA_THEME: ThemeConfig = {
+  id: 'kaltela',
+  mapRaw: kaltelaMapRaw,
+  tilesets: [],
+  backgroundImage: { url: kaltelaBgUrl, width: 960, height: 640 },
+  // Seat 0 = desk-ceo (편집장, replaces Michael/god — see PRD 7장). pc-1..pc-5
+  // are claimed in hire order; PRD recommends 리서처 → 스토리 작가 → 성과 분석가 →
+  // 영업사원 → 연출 담당 for pc-1..pc-5 (매칭은 느슨함, 자리 자체는 상호교환 가능).
+  primarySeatNames: ['desk-ceo', 'pc-1', 'pc-2', 'pc-3', 'pc-4', 'pc-5'],
+  cafeSeatNames: [],
+  cafeStands: [],
+  // No coffee economy in this office. maxCups: 0 means the tray's cup-drawing
+  // loop (`i < cleanCups`) never runs, so these placeholder (0,0) tiles are
+  // never actually rendered — any coordinate here would do.
+  coffee: {
+    trayTile: { x: 0, y: 0 },
+    trayStand: { x: 0, y: 0 },
+    machineStand: { x: 0, y: 0 },
+    sinkTile: { x: 0, y: 0 },
+    sinkStand: { x: 0, y: 0 },
+    maxCups: 0
+  },
+  // Calendar/boards/clock are small code-drawn icons (OfficeFloor.tsx), not
+  // part of office_bg.png — parked in the blank strip left of the editor's
+  // office frame, below the "칼테라 오피스" sign, so they don't sit on top of
+  // any hand-painted desk or the PRD's own information panels.
+  anchors: {
+    // calendar/clock/askBoard are small, similarly-sized icon props — kept in
+    // one horizontal row (same y, 4-tile/32px x-steps) instead of stacked, so
+    // they read as one icon strip under the title card. `boards` is a much
+    // bigger ensemble (82px, two cork boards + an archive table) that actually
+    // renders at x:55–119 (BOARD_CENTER_PAD's own +15, not this +8/+13 icon
+    // convention) — y:18 put its two cork frames directly under the icon row
+    // (calendar's x:48–64 and askBoard's x:96–126 both land inside that
+    // range), so icons and boards visibly overlapped. y:21 drops the boards'
+    // top ~13px below the icon row's bottom edge instead.
+    calendar: { x: 5, y: 15 },
+    clock: { x: 9, y: 15 },
+    askBoard: { x: 12, y: 15 },
+    boards: { x: 5, y: 21 }
+  },
+  errandSpots: [],
+  // No tileset ⇒ no monitor gids to overlay. DeskScreen's gid lookup just
+  // no-ops when nothing resolves (see its own comment), so desks render with
+  // no screen-glow animation — acceptable; office_bg.png already paints a
+  // static monitor icon at each desk.
+  monitor: { offTopLeftGid: 0, onGids: [] },
+  palette: OFFICE_THEME.palette,
+  cast: {
+    byName: KALTELA_CAST_BY_NAME,
+    getFrames: getKaltelaCastFrames,
+    defaultCharacter: KALTELA_DEFAULT_CHARACTER
+  },
+  // 2025-10 재교체 스프라이트(kaltela_sprites, 32×48 프레임)는 정수배 1배/2배만
+  // 쓰라는 요청이 있어 전부 2배로 통일했다(이전 3배/4배 비율 구분은 더 이상
+  // 적용되지 않음). 대표(칼테라)는 hive 에이전트/자리가 아니라 OfficeFloor가
+  // 따로 그리는 장식 캐릭터라 여기엔 없다 — founderScale 참고.
+  seatScale: {
+    'desk-ceo': 2,
+    'pc-1': 2,
+    'pc-2': 2,
+    'pc-3': 2,
+    'pc-4': 2,
+    'pc-5': 2
+  },
+  castWalkFps: 6,
+  // office's SEAT_LEG_CROP/SEAT_BACK_CROP (8/2) are tuned for its 32px-tall
+  // native frame; kaltela_sprites' frame is 48px tall (32×48), so the same
+  // crop fraction scales to 12/3 (8×48/32, 2×48/32) — otherwise the new,
+  // fuller-bodied art's legs would poke out below the desk.
+  castSeatLegCrop: 12,
+  castSeatBackCrop: 3,
+  // ThoughtBubble's own OFFSET_Y(-38) clears office's ~32px×1.08 native frame;
+  // kaltela's is 48px×2x (96px tall), so the bubble needs roughly 96-35≈61
+  // more px of lift to clear the head instead of covering the face.
+  castBubbleHeadroom: 62
+};
+
 /** All registered themes. Phase 0 ships only the office; show themes register
- *  here as their content lands (Phase 2). */
+ *  here as their content lands (Phase 2). 'kaltela' is this fork's own office,
+ *  outside that phased rollout. */
 export const THEMES: Partial<Record<ThemeId, ThemeConfig>> = {
   office: OFFICE_THEME,
   brooklyn99: BROOKLYN99_THEME,
+  kaltela: KALTELA_THEME,
 };
 
 /** Look up a theme by id, falling back to the office theme if unknown/missing

@@ -3,16 +3,17 @@ import { useTranslation } from 'react-i18next';
 import { PixelPanel } from './PixelPanel';
 import { PixelBadge, StatusKind } from './PixelBadge';
 import { useHasTerminalDraft } from './terminalPool';
-import { SpritePortrait } from './SpritePortrait';
+import { CastPortrait } from './CastPortrait';
 import { RealtimeMichaelToggle } from './RealtimeMichaelToggle';
 import { CostHud } from '@/realtime/CostHud';
 import { AccentColorName } from '@/design/tokens';
 import { OfficeCharacterName } from '@/scene/office/cast';
+import type { KaltelaCharacterName } from '@/scene/office/kaltelaCast';
 import { AgentNameEditor } from './AgentNameEditor';
 
 export interface AgentCardProps {
   name: string;
-  character: OfficeCharacterName;
+  character: OfficeCharacterName | KaltelaCharacterName;
   accent: AccentColorName;
   status: StatusKind;
   /** This agent's pty, if it has one. Only used to notice that the USER has
@@ -197,7 +198,7 @@ export function AgentCard({
             display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflow: 'hidden',
             flexShrink: 0
           }}>
-            <SpritePortrait character={character} scale={2} />
+            <CastPortrait character={character} scale={2} />
           </div>
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>

@@ -20,8 +20,12 @@ const ANIM_FRAMES: Record<AnimState, number[]> = {
 
 // Render characters a bit larger than their native 18×32 so heads/faces read
 // clearly on the floor. Applied to the container so the leg-crop mask (a child)
-// scales with the sprite and stays aligned.
-const CHAR_SCALE = 1.08;
+// scales with the sprite and stays aligned. The office/brooklyn99 themes rely
+// on this exact default, so it stays the fallback for any caller that doesn't
+// pass its own `scale` — only a theme with its own size convention (e.g.
+// kaltela's PRD 5장 「크기 비율」, which wants per-seat 3×/4× on a map already
+// drawn at 2×) needs to override it per character.
+const DEFAULT_CHAR_SCALE = 1.08;
 
 /** Ported from shahar061/the-office (office/characters/CharacterSprite.ts). */
 export class CharacterSprite {
@@ -31,12 +35,19 @@ export class CharacterSprite {
   private currentDirection: Direction = 'down';
   private currentAnim: AnimState = 'idle';
   private frameSpeed = 0.15;
+  /** animationSpeed for the 'walk' state only — Pixi's AnimatedSprite advances
+   *  by this many textures per render tick, so fps ≈ walkAnimSpeed * tickerFPS
+   *  (60 assumed). Defaults to the long-standing 0.15 (~9fps); a theme whose
+   *  sheet specifies its own walk_fps (e.g. kaltela's sheet_layout.json: 6)
+   *  passes it in explicitly instead. */
+  private walkAnimSpeed: number;
   private frameW: number;
   private frameH: number;
   private cropMask: Graphics | null = null;
 
-  constructor(frames: Texture[][]) {
+  constructor(frames: Texture[][], scale: number = DEFAULT_CHAR_SCALE, walkFps?: number) {
     this.frames = frames;
+    this.walkAnimSpeed = walkFps ? walkFps / 60 : 0.15;
     this.container = new Container();
 
     const initialFrames = this.getFrames('down', 'idle');
@@ -50,7 +61,7 @@ export class CharacterSprite {
     this.frameH = this.sprite.texture.frame.height || this.sprite.height || 32;
 
     this.container.addChild(this.sprite);
-    this.container.scale.set(CHAR_SCALE);
+    this.container.scale.set(scale);
   }
 
   /**
@@ -83,8 +94,15 @@ export class CharacterSprite {
     this.sprite.mask = this.cropMask;
   }
 
+  /** True when `frames` carries a real 4th row (dedicated left-facing art,
+   *  e.g. kaltela's sheet_layout.json side_left/side_walk_left) instead of
+   *  relying on CharacterSprite's own horizontal mirror of the right row. */
+  private hasDedicatedLeft(): boolean {
+    return this.frames.length > 3;
+  }
+
   private getFrames(direction: Direction, anim: AnimState): Texture[] {
-    const row = DIRECTION_ROW[direction];
+    const row = direction === 'left' && this.hasDedicatedLeft() ? 3 : DIRECTION_ROW[direction];
     return ANIM_FRAMES[anim].map((col) => this.frames[row][col]);
   }
 
@@ -95,8 +113,8 @@ export class CharacterSprite {
     this.currentDirection = direction;
 
     this.sprite.textures = this.getFrames(direction, anim);
-    this.sprite.scale.x = direction === 'left' ? -1 : 1;
-    this.sprite.animationSpeed = anim === 'walk' ? 0.15 : anim === 'idle' ? 0.08 : 0.06;
+    this.sprite.scale.x = direction === 'left' && !this.hasDedicatedLeft() ? -1 : 1;
+    this.sprite.animationSpeed = anim === 'walk' ? this.walkAnimSpeed : anim === 'idle' ? 0.08 : 0.06;
     this.sprite.play();
   }
 

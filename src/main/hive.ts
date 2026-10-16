@@ -155,6 +155,18 @@ export interface AgentMeta {
   /** Michael's prep assistant — enriches prompts and forwards them to Michael.
    *  Send-only: excluded from broadcast fan-out so it never drains an inbox. */
   isAssistant?: boolean;
+  /** Per-agent MCP catalog allow-list (ids from `MCP_CATALOG`). When set, this
+   *  agent's spawn gets ONLY these ids (still gated by global consent/tier —
+   *  a 'secret' id here still needs `mcpDefaults[id].enabled === true` to be
+   *  wired in). Undefined preserves the old behaviour: every enabled catalog
+   *  server goes to every agent. Lets a role-specific hire (e.g. only the
+   *  "성과 분석가" gets Metricool) avoid handing every agent the same tools. */
+  mcpServers?: string[];
+  /** Fully-qualified MCP tool names (`mcp__munder-<id>__<tool>`) to deny for
+   *  this agent via `permissions.deny`, even though the underlying server is
+   *  wired in — e.g. a read-only Gmail hire keeps the server (to read a
+   *  label) but denies its send/delete tools. */
+  mcpDenyTools?: string[];
 }
 
 export interface RegistryAgent extends AgentMeta {
@@ -1000,7 +1012,15 @@ export class HiveManager {
     if (sock && shim) {
       env.HIVE_SOCK = sock;
       const settingsPath = join(dir, 'settings.json');
-      this.writeJson(settingsPath, this.hookSettings(shim, meta.cwd, opts.mcpDefaults, opts.theme, this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs)));
+      this.writeJson(settingsPath, this.hookSettings(
+        shim,
+        meta.cwd,
+        opts.mcpDefaults,
+        opts.theme,
+        this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs),
+        meta.mcpServers,
+        meta.mcpDenyTools
+      ));
       args.push('--settings', settingsPath);
     }
     return { args, env };
@@ -1242,7 +1262,15 @@ export class HiveManager {
     return Array.from(new Set(out));
   }
 
-  private hookSettings(shim: string, cwd: string, cfg: McpDefaultsMap, theme?: 'light' | 'dark', writableDirs: string[] = []): unknown {
+  private hookSettings(
+    shim: string,
+    cwd: string,
+    cfg: McpDefaultsMap,
+    theme?: 'light' | 'dark',
+    writableDirs: string[] = [],
+    mcpAllowIds?: string[],
+    mcpDenyTools?: string[]
+  ): unknown {
     // Bundled node, NOT bare `node` — see nodeLauncherPath(). Claude runs each of
     // these through `sh -c` with a stripped PATH, where `node` is often absent.
     const cmd = this.nodeRun(shim);
@@ -1250,7 +1278,8 @@ export class HiveManager {
       ...(matcher ? { matcher } : {}),
       hooks: [{ type: 'command', command: cmd }]
     });
-    const mcpServers = this.buildDefaultMcpServers(cwd, cfg);
+    const mcpServers = this.buildDefaultMcpServers(cwd, cfg, mcpAllowIds);
+    const deny = (mcpDenyTools ?? []).filter((t) => typeof t === 'string' && t.length > 0);
     return {
       // Match the TUI's truecolor palette to the harness terminal theme —
       // PER SESSION, so the user's global Claude theme (their own terminals
@@ -1286,9 +1315,19 @@ export class HiveManager {
       // failIfUnavailable stays false: a platform without a sandbox (Windows)
       // runs as before rather than refusing to spawn.
       ...(writableDirs.length
+        ? { sandbox: { enabled: true, filesystem: { allowWrite: writableDirs } } }
+        : {}),
+      // `permissions` is built separately from the sandbox block above: a deny
+      // list (e.g. blocking a read-only hire's send/delete MCP tools) is useful
+      // even for an agent with no extra writable dirs, so the two must not share
+      // one conditional — omitting this when BOTH are empty keeps old settings
+      // files byte-identical.
+      ...(writableDirs.length || deny.length
         ? {
-            sandbox: { enabled: true, filesystem: { allowWrite: writableDirs } },
-            permissions: { additionalDirectories: writableDirs }
+            permissions: {
+              ...(writableDirs.length ? { additionalDirectories: writableDirs } : {}),
+              ...(deny.length ? { deny } : {})
+            }
           }
         : {}),
       hooks: {
@@ -1317,10 +1356,21 @@ export class HiveManager {
    */
   private buildDefaultMcpServers(
     cwd: string,
-    cfg: McpDefaultsMap
+    cfg: McpDefaultsMap,
+    allowIds?: string[]
   ): Record<string, { command: string; args: string[]; env?: Record<string, string> }> {
     const out: Record<string, { command: string; args: string[]; env?: Record<string, string> }> = {};
+    // Per-agent scoping (undefined = old behaviour, every enabled catalog entry
+    // goes to every agent). Only gates 'write'/'secret' entries — safe-readonly
+    // ones (filesystem, git, time, …) are core infra every agent needs and stay
+    // on regardless of the allow-list. A role hired with an explicit allow-list
+    // only gets those extra ids — still subject to the same consent/tier check
+    // below, so listing a 'secret' id here is necessary but not sufficient; the
+    // human still has to enable it (supply the token) once, for the whole app,
+    // in settings.
+    const allow = allowIds ? new Set(allowIds) : null;
     for (const e of MCP_CATALOG) {
+      if (allow && e.tier !== 'safe-readonly' && !allow.has(e.id)) continue;
       const consented = cfg?.[e.id]?.enabled;
       const enabled = consented ?? e.defaultEnabled;
       if (!enabled) continue;

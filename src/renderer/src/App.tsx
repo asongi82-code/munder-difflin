@@ -110,7 +110,12 @@ export function App() {
       useStore.getState().setHasGroqKey(!!c.groqApiKey);
       // Mirror the active office theme so OfficeFloor renders it (gated on the
       // tvShowOffices flag; off = always the office). Settings keeps this synced.
-      useStore.getState().setOfficeTheme(c.tvShowOffices ? (c.officeTheme ?? 'office') : 'office');
+      // 'kaltela' is this fork's own permanent office, not one of the five
+      // experimental TV-show skins behind that flag, so it is honored either way.
+      const requestedTheme = c.officeTheme ?? 'office';
+      useStore.getState().setOfficeTheme(
+        requestedTheme === 'kaltela' || c.tvShowOffices ? requestedTheme : 'office'
+      );
       // Mirror the triggers so Settings → Connections and the Command Center's
       // Triggers tab read one list, not two copies that drift — whichever surface
       // saves calls these same setters and the other repaints. No extra IPC: main

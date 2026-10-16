@@ -314,10 +314,11 @@ export interface HarnessConfig {
    *  destructive switch flow). Default false = the picker is hidden and the
    *  office renders as today (zero behavior change). */
   tvShowOffices?: boolean;
-  /** Which office map/cast theme the pixel office renders. Only honored when
-   *  `tvShowOffices` is on; otherwise the office theme is used. Unbuilt show
-   *  themes fall back to 'office' in the loader. */
-  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
+  /** Which office map/cast theme the pixel office renders. The five TV-show
+   *  themes are only honored when `tvShowOffices` is on; 'kaltela' (this fork's
+   *  own office) always is — see renderer App.tsx. Unbuilt show themes fall
+   *  back to 'office' in the loader. */
+  officeTheme?: 'office' | 'kaltela' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn (config-injection or proxy
    *  upstream). API KEYS are NOT stored here — they live write-only in the secret
@@ -449,7 +450,7 @@ const DEFAULTS: HarnessConfig = {
   telemetryEnabled: true,
   multiWindow: true,
   tvShowOffices: false,
-  officeTheme: 'office',
+  officeTheme: 'kaltela',
   slackEnabled: false,
   slackSigningSecret: undefined,
   slackBotToken: undefined,

@@ -22,7 +22,7 @@ import { inboxNudgeText } from '../../../shared/hiveNudge';
 import { resolveGodName } from '../../../shared/godIdentity';
 import { acquireTerminal, resetTerminal, isTerminalAutomationSafe } from '@/components/terminalPool';
 import { canDeliverToAgent, deliverWithAcknowledgement, checkPrecondition } from './queueDelivery';
-import { OFFICE_CAST, DEFAULT_CHARACTER } from '@/scene/office/cast';
+import { OFFICE_CAST, DEFAULT_CHARACTER, type OfficeCharacterName } from '@/scene/office/cast';
 
 const GOD_ID = 'god';
 /** Accent palette for MAIN-spawned (voice-hired) agents — picked deterministically
@@ -1033,7 +1033,12 @@ export function useHive(config: HarnessConfig | null): void {
       const agent: Agent = {
         id: rec.id,
         name: rec.name || rec.id,
-        character,
+        // CastMember.name is `string` (shared with non-office themes' casts,
+        // e.g. kaltelaCast.ts), but castMember()/DEFAULT_CHARACTER here only
+        // ever draw from OFFICE_CAST, so this is still always a real
+        // OfficeCharacterName — Agent.character itself isn't widened (yet;
+        // doing so for real kaltela hires is follow-up work, not this step).
+        character: character as OfficeCharacterName,
         accent: askedAccent ?? SPAWN_ACCENTS[h],
         description: rec.role || 'a fresh harness',
         project,

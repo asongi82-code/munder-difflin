@@ -90,6 +90,28 @@ interface CharacterOptions {
   glowColor: number;
   /** Direction faced while seated. Default 'down' so the face is toward the user. */
   seatDirection?: Direction;
+  /** Per-character sprite scale (passed straight to CharacterSprite). Defaults
+   *  to CharacterSprite's own office-tuned constant when omitted. Does NOT
+   *  affect the seat-offset/leg-crop constants below — those stay a small,
+   *  fixed nudge regardless of display scale (see applySitPose). */
+  scale?: number;
+  /** Per-theme walk animation rate, in real frames/sec (passed straight to
+   *  CharacterSprite). Defaults to CharacterSprite's own ~9fps when omitted —
+   *  kaltela's sheet_layout.json specifies 6. */
+  walkFps?: number;
+  /** Seated leg/back crop, in the sprite's own native (pre-scale) pixels —
+   *  see SEAT_LEG_CROP/SEAT_BACK_CROP. Both tuned for the office theme's
+   *  32px-tall native frame; a theme with a differently-proportioned sheet
+   *  (kaltela's is 48px tall) overrides both so legs still tuck under the
+   *  desk instead of poking out below it. */
+  seatLegCrop?: number;
+  seatBackCrop?: number;
+  /** Extra px the thought bubble lifts above ThoughtBubble's own built-in
+   *  OFFSET_Y, on top of its default headroom (tuned for the office theme's
+   *  ~32px-tall native frame at ~1x scale). A theme whose cast renders taller
+   *  on screen (kaltela: 48px frame × 2x scale = 96px) needs more, or the
+   *  bubble sits low enough to cover the face. */
+  bubbleHeadroom?: number;
   onClick?: (agentId: string) => void;
 }
 
@@ -159,10 +181,17 @@ export class Character {
   private smokeDur = 0;
   private onSmokeDone: (() => void) | null = null;
 
+  private seatLegCrop: number;
+  private seatBackCrop: number;
+  private bubbleHeadroom: number;
+
   constructor(options: CharacterOptions) {
     this.agentId = options.agentId;
     this.mapRenderer = options.mapRenderer;
-    this.sprite = new CharacterSprite(options.frames);
+    this.sprite = new CharacterSprite(options.frames, options.scale, options.walkFps);
+    this.seatLegCrop = options.seatLegCrop ?? SEAT_LEG_CROP;
+    this.seatBackCrop = options.seatBackCrop ?? SEAT_BACK_CROP;
+    this.bubbleHeadroom = options.bubbleHeadroom ?? 0;
     this.deskTile = options.seatTile;
     this.seatDirection = options.seatDirection ?? 'down';
     this.onClick = options.onClick;
@@ -305,8 +334,19 @@ export class Character {
       case 'left':  dx = -SIT_OFFSET; dy = SIT_OFFSET_SIDE; break;
       case 'right': dx = SIT_OFFSET; dy = SIT_OFFSET_SIDE; break;
     }
+    // NOT scaled by seatOffsetScale: a theme like kaltela gives exact,
+    // already-final pixel seat coordinates (measured straight off the hand-
+    // drawn art), so scaling this nudge on top pushed bigger-scale seats
+    // further from their real spot instead of just "sliding onto the chair".
+    // The small fixed amount below is a light touch at any display scale.
     this.sprite.setPosition(this.px + dx, this.py + dy);
-    this.sprite.setSeatedCrop(dir === 'down' ? SEAT_LEG_CROP : SEAT_BACK_CROP);
+    // NOT scaled by seatOffsetScale, unlike dx/dy above: dx/dy nudge a WORLD-
+    // space position, which should grow with the sprite's on-screen size, but
+    // the crop amount is measured in the sprite's own LOCAL/native pixel space
+    // (CharacterSprite.setSeatedCrop masks before the container's `scale` is
+    // applied) — that native frame size doesn't change with display scale, so
+    // scaling this too over-cropped a 3×-scale sprite down to a sliver.
+    this.sprite.setSeatedCrop(dir === 'down' ? this.seatLegCrop : this.seatBackCrop);
   }
 
   /** Sit on a café seat at the CURRENT tile, facing `dir`. The agent must have
@@ -641,7 +681,7 @@ export class Character {
     if (this.idleLoop && !heldByFx) this.updateIdleLoop(dt);
 
     this.sprite.container.zIndex = this.py;
-    this.thoughtBubble.setPosition(this.px, this.py);
+    this.thoughtBubble.setPosition(this.px, this.py - this.bubbleHeadroom);
     // Follow the avatar by hand — the price of sorting above every sprite
     // rather than riding one. zIndex keeps tags y-sorted among THEMSELVES, so
     // the nearer agent's name wins the overlap instead of the two interleaving.

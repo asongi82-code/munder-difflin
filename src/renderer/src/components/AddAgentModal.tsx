@@ -7,6 +7,8 @@ import { Icon } from './Icon';
 import { ProviderLogo } from './ProviderLogo';
 import { useStore, type Agent } from '@/store/store';
 import { OFFICE_CAST, DEFAULT_CHARACTER, type OfficeCharacterName } from '@/scene/office/cast';
+import { KALTELA_CAST, KALTELA_DEFAULT_CHARACTER, type KaltelaCharacterName } from '@/scene/office/kaltelaCast';
+import { KaltelaSpritePortrait } from './KaltelaSpritePortrait';
 import { type AccentColorName } from '@/design/tokens';
 import type { HireManifest } from '@shared/hire';
 import { hireQueueProgress } from '@shared/hireQueue';
@@ -154,8 +156,21 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   const pendingHire = hireQueue.pending[0];
   const reviewProgress = hireQueueProgress(hireQueue);
 
-  const knownCharacter = (c?: string): OfficeCharacterName =>
-    (OFFICE_CAST.some(m => m.name === c) ? (c as OfficeCharacterName) : DEFAULT_CHARACTER);
+  // Under the kaltela theme, OfficeFloor resolves an agent's sprite by looking
+  // up `agent.character` in that theme's own cast (KALTELA_CAST), not
+  // OFFICE_CAST — so the picker below must offer the kaltela roster (and the
+  // founder 'kaltela' herself is a fixed decoration, never a hire) or every
+  // hire falls back to the theme's defaultCharacter ('editor') regardless of
+  // role. Hooking this to the live theme (rather than hardcoding kaltela) is
+  // future-proofing for the generic sibling fork #67 mentions, not scope here.
+  const officeTheme = useStore(s => s.officeTheme);
+  const isKaltela = officeTheme === 'kaltela';
+  const roster = isKaltela ? KALTELA_CAST.filter(c => c.name !== 'kaltela') : OFFICE_CAST;
+  const defaultRosterCharacter: OfficeCharacterName | KaltelaCharacterName =
+    isKaltela ? KALTELA_DEFAULT_CHARACTER : DEFAULT_CHARACTER;
+
+  const knownCharacter = (c?: string): OfficeCharacterName | KaltelaCharacterName =>
+    (roster.some(m => m.name === c) ? (c as OfficeCharacterName | KaltelaCharacterName) : defaultRosterCharacter);
   const knownAccent = (a?: string): AccentColorName =>
     (ACCENTS.includes(a as AccentColorName) ? (a as AccentColorName) : 'sky');
   /** The cast member a typed name refers to, if any.
@@ -168,11 +183,13 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
    *
    *  Returns null on no match, and the caller leaves the avatar alone, so a
    *  deliberate pick is never overwritten by continuing to type. */
-  const characterForName = (n: string): OfficeCharacterName | null => {
+  const characterForName = (n: string): OfficeCharacterName | KaltelaCharacterName | null => {
     const q = n.trim().toLowerCase();
     if (!q) return null;
-    const hit = OFFICE_CAST.find(c => c.displayName.toLowerCase() === q || c.name === q);
-    return hit ? hit.name : null;
+    const hit = roster.find(c => c.displayName.toLowerCase() === q || c.name === q);
+    // CastMember.name is `string` (shared with themes outside the office cast),
+    // but every roster entry here is in fact one of the two character unions.
+    return hit ? (hit.name as OfficeCharacterName | KaltelaCharacterName) : null;
   };
   /** The locally-built spawn command for a manifest: provider preset + model
    *  from the LOCAL config builder, with the manifest's validated flags
@@ -188,8 +205,8 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   const initialProvider = inferAgentProvider(config.defaultCommand);
   const initialModel = isClaudeProvider(initialProvider) ? config.defaultModel : undefined;
 
-  const [name, setName] = useState(pendingHire?.name ?? 'Jim');
-  const [character, setCharacter] = useState<OfficeCharacterName>(knownCharacter(pendingHire?.character));
+  const [name, setName] = useState(pendingHire?.name ?? (isKaltela ? roster[0].displayName : 'Jim'));
+  const [character, setCharacter] = useState<OfficeCharacterName | KaltelaCharacterName>(knownCharacter(pendingHire?.character));
   const [accent, setAccent] = useState<AccentColorName>(knownAccent(pendingHire?.accent));
   const [cwd, setCwd] = useState<string>(config.registeredRepos[0] ?? '');
   // Local mirror of the registered projects so one added from here shows as a
@@ -685,10 +702,10 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
 
                     <Row label={tr('addAgent.character')}>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {OFFICE_CAST.map(c => (
+                        {roster.map(c => (
                           <button
                             key={c.name}
-                            onClick={() => { setCharacter(c.name); setName(c.displayName); }}
+                            onClick={() => { setCharacter(c.name as OfficeCharacterName | KaltelaCharacterName); setName(c.displayName); }}
                             title={c.blurb}
                             style={{
                               padding: 4,
@@ -702,7 +719,9 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                             }}
                           >
                             <div style={{ width: 44, height: 56, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden' }}>
-                              <SpritePortrait character={c.name} scale={2} />
+                              {isKaltela
+                                ? <KaltelaSpritePortrait character={c.name as KaltelaCharacterName} scale={1.2} />
+                                : <SpritePortrait character={c.name as OfficeCharacterName} scale={2} />}
                             </div>
                             <span style={{ fontSize: 11, color: 'var(--cth-ink-700)' }}>{c.displayName}</span>
                           </button>

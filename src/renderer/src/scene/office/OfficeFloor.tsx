@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Application, Container, Graphics, Ticker, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text, Ticker } from 'pixi.js';
 // PixiJS uses new Function() internally, blocked by Electron CSP — this patches it.
 import 'pixi.js/unsafe-eval';
 import { useStore, type Agent } from '@/store/store';
 import { TiledMapRenderer } from './TiledMapRenderer';
 import { Camera } from './Camera';
 import { Character, paintCup } from './Character';
+import { CharacterSprite } from './CharacterSprite';
 import { DeskScreen } from './DeskScreen';
 import { MessageEnvelope, type MessageAct } from './MessageEnvelope';
-import { hexToNumber, DEFAULT_CHARACTER } from './cast';
+import { hexToNumber, DEFAULT_CHARACTER, asOfficeCastCharacter } from './cast';
 import { pickSoloLine, pickExchange, type BreakSpot } from './cafeteriaLines';
 import { colors } from '@/design/tokens';
 import { loadTheme, resolveThemeMap, themeTilesetUrls } from './themeLoader';
+import { loadTexture } from './loadTexture';
 import {
   installContextLossRecovery, planInitFailure, DEFAULT_MAX_INIT_RETRIES
 } from './glRecovery';
@@ -131,19 +133,6 @@ const CHEER_KEYS = [
 /** Load a texture via an <img> element. Unlike Pixi's Assets.load(), this
  *  handles extension-less data: URLs (Vite inlines small assets like the a5
  *  tileset as base64), which the Assets resolver fails to type-detect. */
-function loadTexture(url: string): Promise<Texture> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const tex = Texture.from(img);
-      tex.source.scaleMode = 'nearest';
-      resolve(tex);
-    };
-    img.onerror = () => reject(new Error('failed to load ' + url.slice(0, 40)));
-    img.src = url;
-  });
-}
-
 /** What the agent is doing right now, for the thought cloud. Prefer the live
  *  `action` (e.g. "edit App.tsx", "bash npm test"), fall back to the prompt we
  *  gave it, then to a caller-supplied generic. Returns '' for the working state
@@ -285,12 +274,72 @@ export function OfficeFloor() {
       const world = new Container();
       app.stage.addChild(world);
 
+      // A theme whose floor is one hand-drawn picture (kaltela) rather than a
+      // tileset draws it here, beneath everything else — tilesets:[] means
+      // TiledMapRenderer's own tile layers render nothing (see its early
+      // return in buildTileLayers), so without this the floor would be blank.
+      if (theme.backgroundImage) {
+        const bgTexture = await loadTexture(theme.backgroundImage.url);
+        if (mountIdRef.current !== mountId) { safeDestroy(app); return; }
+        const bg = new Sprite(bgTexture);
+        bg.width = theme.backgroundImage.width;
+        bg.height = theme.backgroundImage.height;
+        world.addChild(bg);
+      }
+
+      // kaltela's title card ("칼테라 오피스 / @kaltela_toon") was baked into
+      // office_bg.png by the art generator and came out blurry/mushed at this
+      // pixel scale (Korean hangul is where these generators struggle most).
+      // Repaint the card fresh here with real PIXI.Text (crisp at any scale)
+      // instead of re-exporting the PNG — same dark card (0x272119, native
+      // bbox 15,9–124,57 ⇒ ×2 = 30,18–250,114), same two text colors sampled
+      // off the original art.
+      if (theme.id === 'kaltela') {
+        const cardG = new Graphics();
+        cardG.roundRect(30, 18, 220, 98, 10).fill(0x272119);
+        world.addChild(cardG);
+        const titleText = new Text({
+          text: '칼테라 오피스',
+          // 'monospace' falls back to a Korean system font with no real bold
+          // face, so fontWeight:'bold' was a no-op on the hangul — sans-serif
+          // (with '900' instead of 'bold') actually renders heavier.
+          style: { fontSize: 26, fontWeight: '900', fill: 0xffced8, fontFamily: 'sans-serif' }
+        });
+        titleText.position.set(48, 32);
+        world.addChild(titleText);
+        const handleText = new Text({
+          text: '@kaltela_toon',
+          style: { fontSize: 17, fontWeight: '700', fill: 0x86827e, fontFamily: 'sans-serif' }
+        });
+        handleText.position.set(48, 76);
+        world.addChild(handleText);
+      }
+
       const mapRenderer = new TiledMapRenderer(resolveThemeMap(theme), tilesetTextures);
       world.addChild(mapRenderer.getContainer());
       const charLayer = mapRenderer.getCharacterContainer();
       const tileCount = mapRenderer.getContainer().children.reduce(
         (n, c) => n + ((c as Container).children?.length ?? 0), 0);
       console.log(`[OfficeFloor] map ${mapRenderer.width}x${mapRenderer.height}, ${tileCount} tile sprites rendered`);
+
+      // 대표(칼테라) — PRD 4-1: a fixed, rear-facing decoration at her own desk,
+      // not a hive agent, so she gets no Character/pathfinding/idle-loop — just
+      // the "뒤" (back) standing frame, placed once.
+      if (theme.id === 'kaltela') {
+        const founderFrames = await theme.cast.getFrames('kaltela');
+        if (mountIdRef.current !== mountId) { safeDestroy(app); return; }
+        // PRD 4-1 좌표(251,297)×2 그대로는 4배 스케일 머리가 모니터에 겹쳐서,
+        // 의자 등받이(검정 실루엣, office_bg.png) 바로 위까지 92px 내렸다.
+        const founderPos = { x: 251 * 2, y: 297 * 2 + 92 };
+        // 대표는 직원(2배)보다 2배 더 크게 — 4배. 의자 등받이에 가려 앉은 것처럼
+        // 보이도록, 48px 프레임 중 머리/왕관만 남기고 아래쪽(어깨 아래)은 크롭한다.
+        const founder = new CharacterSprite(founderFrames, 4, theme.castWalkFps);
+        founder.setAnimation('idle', 'up');
+        founder.setSeatedCrop(20); // keep only the top ~28px (head/crown) of the 48px frame
+        founder.setPosition(founderPos.x, founderPos.y);
+        founder.container.zIndex = founderPos.y;
+        charLayer.addChild(founder.container);
+      }
 
       const camera = new Camera(world);
       camera.setMapSize(mapRenderer.width * mapRenderer.tileSize, mapRenderer.height * mapRenderer.tileSize);
@@ -610,7 +659,7 @@ export function OfficeFloor() {
 
       const emitQuip = (id: string, rt: Runtime, spotIdx: number): void => {
         const spot = cafeSpots[spotIdx];
-        const character = agentById(id)?.character ?? DEFAULT_CHARACTER;
+        const character = asOfficeCastCharacter(agentById(id)?.character ?? DEFAULT_CHARACTER);
         const seed = Math.floor(Math.random() * 1e6);
         // Out of the boss's earshot, café talk turns to… the boss. In his
         // presence it's the usual harmless quips (the sucking up happens via
@@ -635,7 +684,7 @@ export function OfficeFloor() {
         const prt = runtimes.get(partnerId);
         if (!prt?.brk || prt.brk.phase !== 'lingering') return false;
         if (rt.brk.chat || rt.brk.chattingWith || prt.brk.chat || prt.brk.chattingWith) return false;
-        const character = agentById(id)?.character ?? DEFAULT_CHARACTER;
+        const character = asOfficeCastCharacter(agentById(id)?.character ?? DEFAULT_CHARACTER);
         const lines = pickExchange(character, Math.floor(Math.random() * 1e6));
         rt.brk.chat = { lines, partnerId, idx: 0, beat: 0 };
         prt.brk.chattingWith = id;
@@ -1140,7 +1189,15 @@ export function OfficeFloor() {
       const askG = new Graphics();
       askG.eventMode = 'static';
       askG.cursor = 'pointer';
-      askG.position.set(14 * tsB + 25, 10 * tsB);
+      const askTile = theme.anchors.askBoard;
+      askG.position.set(
+        askTile ? askTile.x * tsB : 14 * tsB + 25,
+        // askG's own shape starts 8px ABOVE its position (rect y:-8…) while
+        // calG's starts 5px BELOW its position (rect y:0…, position +5) — the
+        // +13 below cancels that gap so the two boxes' visible tops line up
+        // when both anchors share the same tile row.
+        askTile ? askTile.y * tsB + 13 : 10 * tsB
+      );
       askG.zIndex = 11 * tsB;
       askG.on('pointertap', (ev) => {
         ev.stopPropagation();
@@ -1392,6 +1449,10 @@ export function OfficeFloor() {
           if (seatIndex != null) seatClaims.delete(seatIndex);
           return;
         }
+        // Seat-indexed scale override (PRD 5장 「크기 비율」) — seatIndex lines up
+        // with theme.primarySeatNames 1:1 for every seat that isn't zone overflow.
+        const seatName = seatIndex != null ? theme.primarySeatNames[seatIndex] : undefined;
+        const seatScale = seatName ? theme.seatScale?.[seatName] : undefined;
         const character = new Character({
           agentId: agent.id,
           displayName: agent.name,
@@ -1401,6 +1462,11 @@ export function OfficeFloor() {
           seatDirection: facingForSeat(seatTile),
           spawnTile: entrance, // walk in from the office door
           glowColor: hexNum(colors.accent[agent.accent]) ?? hexToNumber(member.shirt),
+          scale: seatScale,
+          walkFps: theme.castWalkFps,
+          seatLegCrop: theme.castSeatLegCrop,
+          seatBackCrop: theme.castSeatBackCrop,
+          bubbleHeadroom: theme.castBubbleHeadroom,
           onClick: (id) => useStore.getState().select(id),
         });
         character.show(charLayer);

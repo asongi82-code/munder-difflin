@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { PixelPanel } from './PixelPanel';
 import { PixelBadge } from './PixelBadge';
 import { PixelButton } from './PixelButton';
-import { SpritePortrait } from './SpritePortrait';
+import { CastPortrait } from './CastPortrait';
 import { PtyTerminalView } from './PtyTerminalView';
 import { MessageQueueComposer } from './MessageQueueComposer';
 import { TasksKanban } from './TasksKanban';
@@ -11,6 +11,7 @@ import { AskMeTab } from './AskMeTab';
 import { TriggersTab } from './triggers/TriggersTab';
 import { TriggerHistoryTab } from './triggers/TriggerHistoryTab';
 import { WorkersTab } from './WorkersTab';
+import { EditAgentModal } from './EditAgentModal';
 import { SkillsTab } from './SkillsTab';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
@@ -86,6 +87,7 @@ const TABS: { key: CCTab; labelKey: string; icon: Parameters<typeof Icon>[0]['na
 export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent; fullscreen?: boolean }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<CCTab>('terminal');
+  const [editOpen, setEditOpen] = useState(false);
   // The trigger-history ledger has nothing to say until an outside party can
   // reach us, so its tab appears only once an org key or a webhook exists. This
   // is the first config-gated tab in the panel: TABS stays the canonical order
@@ -165,7 +167,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
           boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
           display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', flexShrink: 0
         }}>
-          <SpritePortrait character={agent.character} scale={1} />
+          <CastPortrait character={agent.character} scale={1} />
         </div>
         {/* Title + subtitle truncate; the control cluster never shrinks. At
             sidebar width the old header wrapped its 24-char display-font title
@@ -221,6 +223,21 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
               <Icon name="code" /> {t('commandCenter.ide')}
+            </span>
+          </PixelButton>
+          {/* The god agent had no way to open its own face/engine/Goal editor —
+              every other agent gets this via AgentDetailPanel's identical
+              button, but CommandCenterPanel (shown instead of that panel for
+              the god) never wired one up. Renaming via AgentNameEditor above
+              still works either way; this is what's missing beyond that. */}
+          <PixelButton variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
+            <span
+              className="cth-tip cth-tip-wrap"
+              data-tip={`Edit ${agent.name}: their name and face, which engine they run on, and the briefing that tells them what they are for.`}
+              aria-label="Edit this agent"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <Icon name="edit" /> {t('commandCenter.edit', 'edit')}
             </span>
           </PixelButton>
         </div>
@@ -337,6 +354,9 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
         {tab === 'skills' && <SkillsTab agentCwd={agent.cwd} />}
         {tab === 'workers' && <WorkersTab />}
       </div>
+      {editOpen && (
+        <EditAgentModal agent={agent} onClose={() => setEditOpen(false)} />
+      )}
     </PixelPanel>
   );
 }
@@ -714,7 +734,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                 boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
                 display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', flexShrink: 0
               }}>
-                <SpritePortrait character={a.character} scale={1} />
+                <CastPortrait character={a.character} scale={1} />
               </div>
               <button
                 onClick={() => select(a.id)}
@@ -1057,7 +1077,7 @@ function ArchivedSection() {
             boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
             display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', flexShrink: 0
           }}>
-            <SpritePortrait character={a.character} scale={1} />
+            <CastPortrait character={a.character} scale={1} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-700)' }}>{a.name}</div>

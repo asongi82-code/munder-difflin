@@ -2,9 +2,11 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { SpritePortrait } from './SpritePortrait';
+import { KaltelaSpritePortrait } from './KaltelaSpritePortrait';
 import { ProviderLogo } from './ProviderLogo';
 import { useStore, type Agent } from '@/store/store';
 import { OFFICE_CAST, type OfficeCharacterName } from '@/scene/office/cast';
+import { KALTELA_CAST, type KaltelaCharacterName } from '@/scene/office/kaltelaCast';
 import { type AccentColorName } from '@/design/tokens';
 import {
   type AgentProvider,
@@ -31,10 +33,16 @@ export interface EditAgentModalProps {
  */
 export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
   const updateAgent = useStore((s) => s.updateAgent);
+  const officeTheme = useStore((s) => s.officeTheme);
+  // See AddAgentModal's identical note: under the kaltela theme the picker
+  // must offer KALTELA_CAST (minus the founder, never a hire) or the sprite
+  // on the floor falls back to the theme's default regardless of role.
+  const isKaltela = officeTheme === 'kaltela';
+  const roster = isKaltela ? KALTELA_CAST.filter((c) => c.name !== 'kaltela') : OFFICE_CAST;
   const [config, setConfig] = useState<HarnessConfig | null>(null);
 
   const [name, setName] = useState(agent.name);
-  const [character, setCharacter] = useState<OfficeCharacterName>(agent.character);
+  const [character, setCharacter] = useState<OfficeCharacterName | KaltelaCharacterName>(agent.character);
   const [accent, setAccent] = useState<AccentColorName>(agent.accent);
   const [provider, setProvider] = useState<AgentProvider>(
     inferAgentProvider(agent.command, agent.provider)
@@ -132,13 +140,13 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
 
               <Row label="Character">
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {OFFICE_CAST.map((c) => {
+                  {roster.map((c) => {
                     const active = character === c.name;
                     return (
                       <button
                         key={c.name}
                         type="button"
-                        onClick={() => { setCharacter(c.name); setName(c.displayName); }}
+                        onClick={() => { setCharacter(c.name as OfficeCharacterName | KaltelaCharacterName); setName(c.displayName); }}
                         title={c.blurb}
                         style={{
                           padding: 4,
@@ -155,7 +163,9 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                           display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
                           overflow: 'hidden'
                         }}>
-                          <SpritePortrait character={c.name} scale={1.5} />
+                          {isKaltela
+                            ? <KaltelaSpritePortrait character={c.name as KaltelaCharacterName} scale={1} />
+                            : <SpritePortrait character={c.name as OfficeCharacterName} scale={1.5} />}
                         </div>
                         <span style={{ fontSize: 10, color: 'var(--cth-ink-700)' }}>{c.displayName}</span>
                       </button>

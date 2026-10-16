@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AccentColorName } from '@/design/tokens';
 import type { OfficeCharacterName } from '@/scene/office/cast';
+import type { KaltelaCharacterName } from '@/scene/office/kaltelaCast';
 import type { ThemeId } from '@/scene/office/themeRegistry';
 import type { StatusKind } from '@/components/PixelBadge';
 import type { AgentProvider } from '@shared/agentProvider';
@@ -41,8 +42,11 @@ export interface BlockReason {
 export interface Agent {
   id: string;
   name: string;
-  /** which Office character represents this agent on the floor */
-  character: OfficeCharacterName;
+  /** which Office character represents this agent on the floor. Themes resolve
+   *  this by name (OfficeFloor.tsx: `theme.cast.byName[agent.character]`), so
+   *  under the kaltela theme it holds a KaltelaCharacterName instead — any
+   *  value the active theme doesn't recognize falls back to its own default. */
+  character: OfficeCharacterName | KaltelaCharacterName;
   accent: AccentColorName;
   /** persistent job / hire one-liner — same string as hive registry `role`.
    *  Live status belongs on `status` / `action`, never here. */
@@ -880,7 +884,7 @@ export const useStore = create<State>((set, get) => ({
   setHasGroqKey: (has) => set({ hasGroqKey: has }),
   hasOpenAiKey: false,
   setHasOpenAiKey: (has) => set({ hasOpenAiKey: has }),
-  officeTheme: 'office',
+  officeTheme: 'kaltela',
   setOfficeTheme: (theme) => set({ officeTheme: theme }),
   webhookTriggers: [],
   setWebhookTriggers: (list) => set({ webhookTriggers: list }),

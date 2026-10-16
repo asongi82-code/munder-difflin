@@ -186,7 +186,15 @@ export class TiledMapRenderer {
   }
 
   private buildTileLayers(): void {
-    if (this.mapData.tilesets.length === 0) return;
+    // No tileset (e.g. kaltela: the floor is a background sprite, not tile
+    // art) — skip drawing tiles, but NOT the characterContainer attachment
+    // below: it has nothing to do with tile art, and skipping it along with
+    // the tiles used to leave every character (and anything else added to
+    // charLayer, like the CEO wall calendar) invisible with no error.
+    if (this.mapData.tilesets.length === 0) {
+      this.rootContainer.addChild(this.characterContainer);
+      return;
+    }
 
     for (const layerName of TILE_LAYERS) {
       const layer = this.findLayer(layerName, 'tilelayer');

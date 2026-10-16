@@ -15,7 +15,10 @@ export type OfficeCharacterName =
   | 'toby' | 'creed' | 'meredith';
 
 export interface CastMember {
-  name: OfficeCharacterName;
+  /** Widened to `string` (not `OfficeCharacterName`) so other themes' casts —
+   *  e.g. kaltelaCast.ts, which reads real PNGs instead of painting procedurally
+   *  — can reuse this same shape with their own character ids. */
+  name: string;
   displayName: string;
   /** Signature accent color (hex) — used for the in-scene selection glow. */
   shirt: string;
@@ -46,6 +49,18 @@ export const CAST_BY_NAME: Record<OfficeCharacterName, CastMember> =
   Object.fromEntries(OFFICE_CAST.map((c) => [c.name, c])) as Record<OfficeCharacterName, CastMember>;
 
 export const DEFAULT_CHARACTER: OfficeCharacterName = 'jim';
+
+/** Coerce any character value down to a valid OfficeCharacterName, falling
+ *  back to DEFAULT_CHARACTER. `Agent.character` is themed-whichever (it may
+ *  hold a kaltela-only name — see store.ts), but code that only knows how to
+ *  render/flavor the procedural OFFICE_CAST (SpritePortrait, café quips)
+ *  needs a value from THIS roster regardless of which theme is active. Those
+ *  call sites are never reached in the kaltela theme's own seats anyway (its
+ *  sprites render through theme.cast, and it has no café), so falling back
+ *  here is a type-safety net, not a visible behavior change. */
+export function asOfficeCastCharacter(c: string): OfficeCharacterName {
+  return OFFICE_CAST.some((m) => m.name === c) ? (c as OfficeCharacterName) : DEFAULT_CHARACTER;
+}
 
 export function hexToNumber(hex: string): number {
   return parseInt(hex.replace('#', ''), 16);
