@@ -49,12 +49,13 @@ const SIT_OFFSET_SIDE = 4; // left/right: a smaller drop plus the sideways tuck
 const SEAT_LEG_CROP = 8;
 const SEAT_BACK_CROP = 2;
 
-// Idle 30/30 loop: between tasks an agent alternates roaming the floor with
+// Idle loop: between tasks an agent alternates roaming the floor with
 // resting at its own desk — for every IDLE_LINGER_SECONDS it spends lingering it
 // then sits at its desk for DESK_REST_SECONDS, and repeats. Working agents skip
-// this entirely (they stay seated via sitAtDesk).
-const IDLE_LINGER_SECONDS = 30;
-const DESK_REST_SECONDS = 30;
+// this entirely (they stay seated via sitAtDesk). Biased toward resting so the
+// floor doesn't feel like everyone is constantly on the move.
+const IDLE_LINGER_SECONDS = 12;
+const DESK_REST_SECONDS = 60;
 
 // Nameplate. Small and thinly outlined on purpose: a dozen of these on screen
 // at once should read as labels under the sprites, not compete with the action
@@ -131,7 +132,7 @@ export class Character {
   private sitting = false;
   private wandering = false;
   private idleTimer = 0;
-  private idleWanderDelay = 1 + Math.random() * 3;
+  private idleWanderDelay = 3 + Math.random() * 5;
   // Idle 30/30 loop state (see constants above). Active only between tasks.
   private idleLoop = false;
   private idleLoopPhase: 'linger' | 'toDesk' | 'resting' = 'linger';
@@ -410,7 +411,7 @@ export class Character {
     this.pendingWork = null;
     this.wandering = true;
     this.idleTimer = 0;
-    this.idleWanderDelay = 0.5 + Math.random() * 2;
+    this.idleWanderDelay = 2 + Math.random() * 4;
     this.sprite.setSeatedCrop(0);
     if (this.state !== 'walk') {
       this.state = 'idle';
@@ -904,7 +905,7 @@ export class Character {
         // Reached a wander waypoint — pause, idle, then pick another later.
         this.state = 'idle';
         this.idleTimer = 0;
-        this.idleWanderDelay = 1 + Math.random() * 3;
+        this.idleWanderDelay = 3 + Math.random() * 5;
         this.sprite.setAnimation('idle', this.direction);
       } else {
         this.setIdle();
@@ -981,7 +982,7 @@ export class Character {
     this.idleTimer += dt;
     if (this.idleTimer < this.idleWanderDelay) return;
     this.idleTimer = 0;
-    this.idleWanderDelay = 1 + Math.random() * 3;
+    this.idleWanderDelay = 3 + Math.random() * 5;
     // Pick a nearby walkable tile and stroll to it.
     const cur = this.getTilePosition();
     const range = 6;

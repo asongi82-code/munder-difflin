@@ -50,7 +50,7 @@ export type Facing = 'up' | 'down' | 'left' | 'right';
 /** Kinds of small idle errands around the office (incl. plant watering).
  *  'smoke' is the boss special: cigar at the open window, god only. */
 export type ErrandKind =
-  | 'water' | 'window' | 'dispenser' | 'fridge' | 'shelf' | 'bin' | 'smoke';
+  | 'water' | 'window' | 'dispenser' | 'fridge' | 'shelf' | 'bin' | 'smoke' | 'sweep';
 
 /** One idle-errand anchor: a stand tile + facing, an `fx` tile for the ambient
  *  animation, a duration, and an optional god-only restriction. */
@@ -371,7 +371,30 @@ export const KALTELA_THEME: ThemeConfig = {
     askBoard: { x: 12, y: 15 },
     boards: { x: 5, y: 21 }
   },
-  errandSpots: [],
+  // Anchored to the 4 plant pots and the window actually drawn in
+  // office_bg.png (measured by scanning the art for the pot/window pixel
+  // clusters, then converting 1x art-pixel coords → 2x map-tile coords via
+  // /4, since this map's tile = 8px over the 2x background). The two desk-top
+  // pots (flower, sprout) flank the "대표 모니터" display desk, not an agent's
+  // own seat, so they're approached from the north (open floor between the
+  // pc-3/pc-4 desk row and the monitor desk) rather than from the south,
+  // which is the decorative 대표(칼테라) sprite's side.
+  errandSpots: [
+    // 잎 화분 — floor-level pot left of the 편집장실 frame.
+    { kind: 'water', stand: { x: 30, y: 30 }, facing: 'up', fx: { x: 30, y: 22 }, duration: 4.5 },
+    // 선인장 — floor-level pot right of the 편집장실 frame, below the window.
+    { kind: 'water', stand: { x: 95, y: 30 }, facing: 'up', fx: { x: 95, y: 22 }, duration: 4.5 },
+    // 꽃 화분 — sits on the 대표 모니터 desk, left of the monitor.
+    { kind: 'water', stand: { x: 44, y: 55 }, facing: 'down', fx: { x: 44, y: 64 }, duration: 4.5 },
+    // 새싹 화분 — sits on the 대표 모니터 desk, right of the monitor.
+    { kind: 'water', stand: { x: 82, y: 55 }, facing: 'down', fx: { x: 82, y: 63 }, duration: 4.5 },
+    // 창문 — the city-view window, top-right.
+    { kind: 'window', stand: { x: 104, y: 18 }, facing: 'up', fx: { x: 104, y: 16 }, duration: 5 },
+    // 빗자루질 — no swept-mess art on the floor, so this is just an open patch
+    // of walkable floor (clear of every desk/seat/south-of-seat block) between
+    // the two middle desk rows.
+    { kind: 'sweep', stand: { x: 60, y: 35 }, facing: 'down', fx: { x: 60, y: 35 }, duration: 5 },
+  ],
   // No tileset ⇒ no monitor gids to overlay. DeskScreen's gid lookup just
   // no-ops when nothing resolves (see its own comment), so desks render with
   // no screen-glow animation — acceptable; office_bg.png already paints a

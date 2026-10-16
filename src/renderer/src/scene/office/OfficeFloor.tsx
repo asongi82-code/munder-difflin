@@ -57,6 +57,15 @@ interface CoffeeRun {
   timer: number;
 }
 
+/** A quick check-in at the editor's desk at the START of a fresh busy
+ *  stretch — walk over, linger a moment, walk back, then settle into the
+ *  real "working" pose. 'there' is the only phase with a running timer;
+ *  'toEditor'/'toDesk' resolve via the walk's own arrival callback. */
+interface VisitRun {
+  phase: 'toEditor' | 'there' | 'toDesk';
+  timer: number;
+}
+
 
 interface Runtime {
   character: Character;
@@ -76,6 +85,10 @@ interface Runtime {
   run?: CoffeeRun;
   /** When the current busy stretch (working/thinking/compacting) began. */
   busySince?: number;
+  visit?: VisitRun;
+  /** Wall-clock time this agent last made (or abandoned) the editor-visit
+   *  trip — throttles how often it repeats on a run of short tasks. */
+  lastVisitAt?: number;
 }
 
 /** kaltela 사무실 정보 표시 (PRD 4-1 / 「8. 개발 순서」 6번). Mirrors the main
@@ -102,6 +115,14 @@ interface KaltelaOfficeSnapshotLike {
  *  reads like real work completed when none did. */
 const CHEER_MIN_BUSY_MS = 60_000;
 
+/** Floor between repeat editor-visit trips for the same agent. Starting a
+ *  fresh busy stretch is "once per task", but a flurry of short back-to-back
+ *  tasks would otherwise send the same agent to the editor's desk over and
+ *  over — this keeps that rare, same spirit as the café/errand throttling. */
+const EDITOR_VISIT_COOLDOWN_MS = 2 * 60_000;
+const EDITOR_VISIT_LINGER_MIN = 2.5;
+const EDITOR_VISIT_LINGER_MAX = 4.5;
+
 /** What an avatar mutters per errand, picked at random. i18n keys into
  *  `office.errand.*`. */
 const ERRAND_THOUGHTS: Record<ErrandKind, readonly string[]> = {
@@ -111,7 +132,8 @@ const ERRAND_THOUGHTS: Record<ErrandKind, readonly string[]> = {
   fridge:    ['office.errand.fridge.0', 'office.errand.fridge.1', 'office.errand.fridge.2'],
   shelf:     ['office.errand.shelf.0', 'office.errand.shelf.1', 'office.errand.shelf.2'],
   bin:       ['office.errand.bin.0', 'office.errand.bin.1', 'office.errand.bin.2'],
-  smoke:     ['office.errand.smoke.0', 'office.errand.smoke.1', 'office.errand.smoke.2', 'office.errand.smoke.3']
+  smoke:     ['office.errand.smoke.0', 'office.errand.smoke.1', 'office.errand.smoke.2', 'office.errand.smoke.3'],
+  sweep:     ['office.errand.sweep.0', 'office.errand.sweep.1', 'office.errand.sweep.2']
 };
 
 /** What workers blurt out when the boss walks by — performative excellence.
@@ -146,6 +168,14 @@ const CHEER_KEYS = [
   'office.cheer.4',
   'office.cheer.5',
   'office.cheer.6'
+] as const;
+
+/** Said at the editor's desk, right before heading back to actually start a
+ *  fresh task. */
+const VISIT_EDITOR_KEYS = [
+  'office.visitEditor.0',
+  'office.visitEditor.1',
+  'office.visitEditor.2'
 ] as const;
 
 /** Load a texture via an <img> element. Unlike Pixi's Assets.load(), this
@@ -1017,12 +1047,12 @@ export function OfficeFloor() {
           if (b.timer <= 0) endBreak(id, rt);
         }
 
-        // Periodically send one idle agent on a break — but cap the room at 4.
+        // Periodically send one idle agent on a break — but cap the room at 2.
         cafeCooldown -= dt;
         if (cafeCooldown > 0) return;
-        cafeCooldown = 6 + Math.random() * 6;
-        if (cafeTaken.filter(Boolean).length >= 4) return;
-        if (Math.random() >= 0.7) return;          // not every window — keep it casual
+        cafeCooldown = 20 + Math.random() * 20;
+        if (cafeTaken.filter(Boolean).length >= 2) return;
+        if (Math.random() >= 0.25) return;         // rare — keep the floor calm
         const candidates: Array<[Agent, Runtime]> = [];
         for (const agent of useStore.getState().agents) {
           const rt = runtimes.get(agent.id);
@@ -1092,6 +1122,19 @@ export function OfficeFloor() {
             const y = 2 - Math.sin(p * Math.PI) * 9;
             g.rect(Math.round(x), Math.round(y), 2, 2).fill({ color: 0xf5f1e6, alpha: 0.95 });
           }
+        } else if (kind === 'sweep') {
+          // a little dust cloud swishing side to side at ground level, one
+          // stroke per ~1.2s, plus a couple of specks kicked up on each pass
+          const ph = (t / 1.2) % 1;
+          const swing = Math.sin(ph * Math.PI * 2); // -1..1, full stroke each cycle
+          const bx = 8 + swing * 6;
+          g.ellipse(bx, 22, 4, 1.5).fill({ color: 0xd8cdb8, alpha: 0.5 });
+          const kickPh = (ph * 2) % 1; // a speck kicks up twice per stroke
+          if (kickPh < 0.5) {
+            const p = kickPh / 0.5;
+            g.rect(Math.round(bx + (swing >= 0 ? 4 : -4)), Math.round(22 - Math.sin(p * Math.PI) * 5), 1, 1)
+              .fill({ color: 0xcbbfa6, alpha: 0.9 * (1 - p) });
+          }
         }
         // 'water' draws nothing here — droplets ride on the character itself
       };
@@ -1127,8 +1170,8 @@ export function OfficeFloor() {
         }
         errCooldown -= dt;
         if (errCooldown > 0) return;
-        errCooldown = 14 + Math.random() * 18;
-        if (Math.random() >= 0.65) return;          // keep it occasional
+        errCooldown = 30 + Math.random() * 30;
+        if (Math.random() >= 0.3) return;           // rare — keep it occasional
         const free = ERRAND_SPOTS.map((_, i) => i).filter((i) => !errandTaken[i]);
         if (free.length === 0) return;
         const idx = free[Math.floor(Math.random() * free.length)];
@@ -1174,6 +1217,64 @@ export function OfficeFloor() {
           if (spot.kind === 'water') c.startWatering(spot.duration, finish);
           else if (spot.kind === 'smoke') c.startSmoking(spot.duration, finish);
         });
+      };
+
+      // ─── Editor check-in: a quick trip to the editor's desk before a fresh
+      // task actually starts ──────────────────────────────────────────────
+      const releaseVisit = (rt: Runtime): void => {
+        rt.visit = undefined;
+      };
+
+      /** Start the trip if this agent just began a fresh busy stretch and
+       *  isn't on cooldown. Returns true if it took the avatar (the caller
+       *  should skip the normal working/thinking handling this call — the
+       *  trip settles into that pose itself once it's back). */
+      const maybeStartEditorVisit = (agent: Agent, rt: Runtime): boolean => {
+        const god = useStore.getState().agents.find((a) => a.isGod);
+        const grt = god ? runtimes.get(god.id) : undefined;
+        if (!grt || grt === rt) return false; // no editor hired yet (or this IS the editor)
+        const last = rt.lastVisitAt;
+        if (last !== undefined && Date.now() - last < EDITOR_VISIT_COOLDOWN_MS) return false;
+        // Stand two tiles south of the editor's seat — one tile south is
+        // always collision-blocked (facingForSeat's "face down" signal), so
+        // this is the nearest open floor tile that's still clearly "at the
+        // desk" from the front. Spread simultaneous visitors out a little
+        // (left/center/right) instead of stacking them on one exact tile.
+        const desk = grt.character.getDeskTile();
+        let inLine = 0;
+        for (const other of runtimes.values()) if (other.visit) inLine++;
+        const dx = [0, -1, 1][inLine % 3];
+        const approach: Tile = { x: desk.x + dx, y: desk.y + 2 };
+        const c = rt.character;
+        rt.visit = { phase: 'toEditor', timer: 0 };
+        c.walkToAndThen(approach, () => {
+          if (!rt.visit || rt.visit.phase !== 'toEditor') return; // superseded mid-walk
+          rt.visit = { phase: 'there', timer: EDITOR_VISIT_LINGER_MIN + Math.random() * (EDITOR_VISIT_LINGER_MAX - EDITOR_VISIT_LINGER_MIN) };
+          c.faceDirection('up');
+          c.showThought(t(VISIT_EDITOR_KEYS[Math.floor(Math.random() * VISIT_EDITOR_KEYS.length)]));
+        });
+        return true;
+      };
+
+      const updateEditorVisits = (dt: number): void => {
+        for (const [id, rt] of runtimes) {
+          const v = rt.visit;
+          if (!v || v.phase !== 'there') continue;
+          v.timer -= dt;
+          if (v.timer > 0) continue;
+          v.phase = 'toDesk';
+          const agent = agentById(id);
+          const c = rt.character;
+          c.hideThought();
+          c.walkToAndThen(c.getDeskTile(), () => {
+            if (!rt.visit || rt.visit.phase !== 'toDesk') return; // superseded mid-walk
+            releaseVisit(rt);
+            rt.lastVisitAt = Date.now();
+            // Re-run the normal status handling now that the trip is done —
+            // it'll sit the agent down and show its real "working" thought.
+            if (agent) applyState(agent, rt, true);
+          });
+        }
       };
 
       // ─── The boss aura: performative excellence in Michael's presence ──────
@@ -1687,6 +1788,7 @@ export function OfficeFloor() {
         releaseBreak(rt);                // free any café seat it was holding
         releaseErrand(rt);               // and any idle errand it was running
         releaseRun(rt);                  // and any coffee run in progress
+        releaseVisit(rt);                // and any editor-visit trip in progress
         // Facilities collects an abandoned mug (carried or parked on the desk)
         // back onto the sideboard, so the finite cup stock can never leak away.
         if (rt.character.isCarryingCup() || rt.character.hasCupOnDesk()) {
@@ -1721,6 +1823,10 @@ export function OfficeFloor() {
         const wasBusy = rt.prevStatus === 'working' || rt.prevStatus === 'thinking' || rt.prevStatus === 'compacting';
         const isBusy = agent.status === 'working' || agent.status === 'thinking' || agent.status === 'compacting';
         if (isBusy && !wasBusy) rt.busySince = Date.now();
+        // The very start of a fresh busy stretch — the one moment that
+        // earns an editor-visit trip (see below), not every working/thinking
+        // refresh within an already-running task.
+        const startedWork = isBusy && !wasBusy && !agent.isGod;
         const finishedWork = !force && !agent.isGod
           && wasBusy && (agent.status === 'idle' || agent.status === 'success')
           && rt.busySince !== undefined && Date.now() - rt.busySince >= CHEER_MIN_BUSY_MS;
@@ -1762,6 +1868,17 @@ export function OfficeFloor() {
           }
           releaseRun(rt);
         }
+        // A check-in trip to the editor's desk: a real busy status keeps the
+        // trip going (the director owns the avatar until it's back); only an
+        // idle/success/blocked/ghost refresh interrupts it.
+        if (rt.visit) {
+          if (isBusy) return;
+          releaseVisit(rt);
+        }
+        // Fresh task, editor hired, not on cooldown → make the trip instead
+        // of sitting straight down. The trip itself re-applies this status
+        // once it's back (see updateEditorVisits), so it's safe to bail here.
+        if (startedWork && maybeStartEditorVisit(agent, rt)) return;
 
         // A thought cloud above the head shows what the agent is doing RIGHT NOW
         // (its live `action`, e.g. "edit App.tsx"). Working → sit at the desk;
@@ -1957,6 +2074,7 @@ export function OfficeFloor() {
         updateCafeteria(dt);
         updateCoffeeRuns(dt);
         updateErrands(dt);
+        updateEditorVisits(dt);
         updateBossAura(dt);
         updateDeskLife(dt);
         updateBoardMoves(dt);

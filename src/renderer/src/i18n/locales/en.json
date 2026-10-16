@@ -746,6 +746,11 @@
         "boss break.",
         "thinking big thoughts 🚬",
         "I DECLARE… a break"
+      ],
+      "sweep": [
+        "sweeping up a bit 🧹",
+        "quick tidy-up",
+        "dust doesn't stand a chance"
       ]
     },
     "suckUp": [
@@ -774,6 +779,11 @@
       "another one done",
       "crushed it",
       "in the books"
+    ],
+    "visitEditor": [
+      "checking in before I start",
+      "quick sync first",
+      "running this by the editor"
     ],
     "mugs": {
       "empty": "no clean mugs left…",
