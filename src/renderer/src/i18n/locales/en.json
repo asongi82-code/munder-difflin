@@ -389,6 +389,7 @@
     "tabs": {
       "terminal": "terminal",
       "morning": "morning report",
+      "nextEpisode": "next episode",
       "floor": "monitor",
       "tasks": "tasks",
       "human": "ask me",

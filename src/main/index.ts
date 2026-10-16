@@ -63,6 +63,7 @@ import * as integrations from './integrations';
 import { validateBaseUrl, buildAuthHeaders, resolveUpstreamUrl, secretRefFor, INTEGRATION_TEMPLATES } from '../shared/integrations';
 import { getKaltelaOfficeSnapshot } from './kaltelaOffice';
 import { getKaltelaMorningReport } from './kaltelaMorningReport';
+import { getKaltelaNextPicks, selectKaltelaEpisode } from './kaltelaNextEpisode';
 import { RosterStore } from './roster';
 import { buildWorkerLaunch } from './workerLaunch';
 import { ControlRegistry } from './control';
@@ -3208,6 +3209,20 @@ ipcMain.handle('kaltela:officeData', () => getKaltelaOfficeSnapshot());
 // Same 'notion' integration record, episode board only. `force` bypasses the
 // 60s cache for the panel's manual refresh button.
 ipcMain.handle('kaltela:morningReport', (_evt, opts?: { force?: boolean }) => getKaltelaMorningReport(opts ?? {}));
+
+// ─── IPC: kaltela 리서처 → 스토리 작가 (PRD.md 「8. 개발 순서」 8번, P0-2) ────────
+// TOP2 추천(이미 리서처가 카드에 적어 둔 "리서처 메모"를 읽기만 함)과, 고른
+// 카드의 상태를 대본작성으로 옮기며 클로드용 프롬프트를 조립하는 부분만 이
+// 프로세스가 맡는다. 최종 대본 정리(연속성 메모 추출·태그·대본확정 전환)는
+// 글 내용을 이해해야 하는 판단이라 실제 스토리 작가 하이브 에이전트에게
+// 하이브 메시지로 넘긴다 — 그 전송은 renderer가 기존 hive:send로 한다
+// (MorningReportPanel의 "리서처에게 추천 요청"과 같은 패턴).
+ipcMain.handle('kaltela:nextPicks', (_evt, opts?: { force?: boolean }) => getKaltelaNextPicks(opts ?? {}));
+ipcMain.handle('kaltela:selectEpisode', (_evt, cardId: unknown) =>
+  typeof cardId === 'string' && cardId
+    ? selectKaltelaEpisode(cardId)
+    : Promise.resolve({ ok: false, error: '카드 id가 없습니다' })
+);
 
 // ─── IPC: config ────────────────────────────────────────────────────────────
 ipcMain.handle('config:get', (): HarnessConfig => readConfig());

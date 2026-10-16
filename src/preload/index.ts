@@ -781,6 +781,14 @@ const api = {
    *  캐시를 건너뛴다(패널의 "다시 불러오기"). */
   getKaltelaMorningReport: (opts?: { force?: boolean }): Promise<unknown> =>
     ipcRenderer.invoke('kaltela:morningReport', opts),
+  /** 리서처 TOP2 추천 (PRD 8번, P0-2). 리서처가 "아이디어" 카드에 이미 적어
+   *  둔 "리서처 메모"를 읽어 보여줄 뿐, 점수를 새로 매기지 않는다. */
+  getKaltelaNextPicks: (opts?: { force?: boolean }): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:nextPicks', opts),
+  /** 고른 카드의 상태를 대본작성으로 옮기고, 클로드에 붙여넣을 프롬프트를
+   *  조립해 돌려준다 (PRD 8번, P0-2, 스토리 작가 ①). */
+  selectKaltelaEpisode: (cardId: string): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:selectEpisode', cardId),
   hiveLog: (n?: number): Promise<unknown[]> => ipcRenderer.invoke('hive:log', n ?? 200),
   hiveMemory: (id: string): Promise<string> => ipcRenderer.invoke('hive:memory', id),
   hiveInbox: (id: string): Promise<HiveMessage[]> => ipcRenderer.invoke('hive:inbox', id),
