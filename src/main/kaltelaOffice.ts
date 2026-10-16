@@ -8,13 +8,10 @@
  * 실패하면 null을 돌려주고, 렌더러는 그 값을 '—'로 보여준다(지어내지 않음).
  */
 import * as integrations from './integrations';
-import { buildAuthHeaders, resolveUpstreamUrl } from '../shared/integrations';
 import { readConfig } from './config';
+import { NOTION_INTEGRATION_ID, notionQueryDatabase, titleOf, selectOf, dateOf, numberOf } from './notion';
 
-const NOTION_INTEGRATION_ID = 'notion';
-const NOTION_VERSION = '2022-06-28';
 const CACHE_TTL_MS = 60_000;
-const FETCH_TIMEOUT_MS = 10_000;
 
 export interface KaltelaWeekCard {
   title: string;
@@ -35,78 +32,6 @@ export interface KaltelaOfficeSnapshot {
   followerCount: number | null;
   todayLabel: string;
   week: KaltelaWeekCard[];
-}
-
-type NotionPage = { id: string; properties: Record<string, NotionProp> };
-type NotionProp = {
-  type: string;
-  title?: Array<{ plain_text?: string }>;
-  select?: { name?: string } | null;
-  date?: { start?: string } | null;
-  number?: number | null;
-};
-
-function titleOf(page: NotionPage, name: string): string | null {
-  const p = page.properties?.[name];
-  if (p?.type === 'title') {
-    const text = (p.title ?? []).map((t) => t.plain_text ?? '').join('').trim();
-    return text || null;
-  }
-  return null;
-}
-function selectOf(page: NotionPage, name: string): string | null {
-  const p = page.properties?.[name];
-  return p?.type === 'select' ? (p.select?.name ?? null) : null;
-}
-function dateOf(page: NotionPage, name: string): string | null {
-  // 실제 노션 DB와 대조해 이름이 정확히 일치함을 확인했다(PRD 6-0). 다른
-  // 이름의 date 속성으로 대신 떨어지는 fallback은 엉뚱한 날짜를 가져오는
-  // 쪽이 더 위험해서(예: 발행 예정일 대신 최근갱신일을 집는 식) 두지 않는다.
-  const p = page.properties?.[name];
-  return p?.type === 'date' && p.date?.start ? p.date.start : null;
-}
-function numberOf(page: NotionPage, name: string): number | null {
-  const p = page.properties?.[name];
-  return p?.type === 'number' && typeof p.number === 'number' ? p.number : null;
-}
-
-/** POST a database query through the stored 'notion' integration. Returns
- *  null on anything short of a clean 200 — missing integration, missing
- *  secret, bad db id, network error, timeout. Never throws. Logs a short,
- *  secret-free reason to the main-process console on failure so a dead
- *  connection is debuggable instead of silently looking like "no data". */
-async function notionQueryDatabase(dbId: string, body: Record<string, unknown>): Promise<NotionPage[] | null> {
-  const rec = integrations.getRecord(NOTION_INTEGRATION_ID);
-  if (!rec) { console.error(`[kaltelaOffice] no '${NOTION_INTEGRATION_ID}' integration record — add one in Settings → Connections → Integrations`); return null; }
-  if (!rec.enabled) { console.error(`[kaltelaOffice] '${NOTION_INTEGRATION_ID}' integration exists but is disabled`); return null; }
-  const secret = integrations.getSecret(rec.secretRef);
-  if (!secret) { console.error(`[kaltelaOffice] '${NOTION_INTEGRATION_ID}' integration has no stored secret`); return null; }
-  const target = resolveUpstreamUrl(rec.baseUrl, `/databases/${dbId}/query`);
-  if (!target) { console.error(`[kaltelaOffice] could not resolve query URL for db ${dbId} against baseUrl ${rec.baseUrl}`); return null; }
-  try {
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
-    const r = await fetch(target, {
-      method: 'POST',
-      headers: {
-        ...buildAuthHeaders(rec.authType, rec.authHeader, secret),
-        'content-type': 'application/json',
-        'Notion-Version': NOTION_VERSION
-      },
-      body: JSON.stringify(body)
-    });
-    clearTimeout(timer);
-    if (!r.ok) {
-      const text = await r.text().catch(() => '');
-      console.error(`[kaltelaOffice] notion query failed for db ${dbId}: HTTP ${r.status} ${text.slice(0, 300)}`);
-      return null;
-    }
-    const json = (await r.json()) as { results?: NotionPage[] };
-    return Array.isArray(json.results) ? json.results : null;
-  } catch (e) {
-    console.error(`[kaltelaOffice] notion query threw for db ${dbId}:`, e instanceof Error ? e.message : e);
-    return null;
-  }
 }
 
 const STATUS_STAGE: Record<string, number> = {

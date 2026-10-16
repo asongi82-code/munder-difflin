@@ -388,6 +388,7 @@
     "ide": "IDE",
     "tabs": {
       "terminal": "终端",
+      "morning": "早报",
       "floor": "监控",
       "tasks": "任务",
       "human": "问我",

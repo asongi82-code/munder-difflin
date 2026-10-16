@@ -776,6 +776,11 @@ const api = {
   /** kaltela 오피스 체크리스트/모니터/보드용 노션 스냅샷 (PRD 8번). 토큰/DB id가
    *  없거나 요청이 실패하면 해당 값이 null인 스냅샷을 돌려준다. */
   getKaltelaOfficeData: (): Promise<unknown> => ipcRenderer.invoke('kaltela:officeData'),
+  /** 편집장 아침 보고 (PRD 8번, P0-1). 노션 연결/DB id가 없거나 쿼리가 실패하면
+   *  `connected: false`만 있는 스냅샷을 돌려준다(지어내지 않음). `force`는 60초
+   *  캐시를 건너뛴다(패널의 "다시 불러오기"). */
+  getKaltelaMorningReport: (opts?: { force?: boolean }): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:morningReport', opts),
   hiveLog: (n?: number): Promise<unknown[]> => ipcRenderer.invoke('hive:log', n ?? 200),
   hiveMemory: (id: string): Promise<string> => ipcRenderer.invoke('hive:memory', id),
   hiveInbox: (id: string): Promise<HiveMessage[]> => ipcRenderer.invoke('hive:inbox', id),

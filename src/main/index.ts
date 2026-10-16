@@ -62,6 +62,7 @@ import { IntegrationBroker } from './integrationBroker';
 import * as integrations from './integrations';
 import { validateBaseUrl, buildAuthHeaders, resolveUpstreamUrl, secretRefFor, INTEGRATION_TEMPLATES } from '../shared/integrations';
 import { getKaltelaOfficeSnapshot } from './kaltelaOffice';
+import { getKaltelaMorningReport } from './kaltelaMorningReport';
 import { RosterStore } from './roster';
 import { buildWorkerLaunch } from './workerLaunch';
 import { ControlRegistry } from './control';
@@ -3202,6 +3203,11 @@ ipcMain.handle('integrations:test', async (_evt, payload: unknown) => {
 // 'notion' integration record Settings → Connections already manages — no
 // new secret storage. Cached main-side; see kaltelaOffice.ts for fallback.
 ipcMain.handle('kaltela:officeData', () => getKaltelaOfficeSnapshot());
+
+// ─── IPC: kaltela 편집장 아침 보고 (PRD.md 「8. 개발 순서」 7번, P0-1) ─────────
+// Same 'notion' integration record, episode board only. `force` bypasses the
+// 60s cache for the panel's manual refresh button.
+ipcMain.handle('kaltela:morningReport', (_evt, opts?: { force?: boolean }) => getKaltelaMorningReport(opts ?? {}));
 
 // ─── IPC: config ────────────────────────────────────────────────────────────
 ipcMain.handle('config:get', (): HarnessConfig => readConfig());

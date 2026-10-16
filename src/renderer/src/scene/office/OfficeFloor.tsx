@@ -243,6 +243,17 @@ export function OfficeFloor() {
 
     const runtimes = new Map<string, Runtime>();
     const seatClaims = new Set<number>();
+    // addCharacter is async (awaits sprite-frame loading) but claims a seat
+    // SYNCHRONOUSLY up front. syncAgents() re-runs on every `agents` store
+    // update — which fires rapidly while an agent is "starting up" (each PTY
+    // output chunk updates its action/status) — and re-checked `runtimes` for
+    // an agent still mid-load always came back empty, so every tick fired a
+    // FRESH addCharacter() for the same agent, each claiming its own seat
+    // before any of them finished. One agent could claim 2-3 seats this way,
+    // starving the rest (seatIndex stuck null, rendered off their desk at the
+    // entrance fallback). This guard makes "already loading" visible
+    // synchronously so a re-run skips agents with an add already in flight.
+    const pendingAdds = new Set<string>();
     // In-flight message envelopes (sender desk → recipient desk). Capped so a
     // broadcast doesn't bury the floor in paper.
     const envelopes: MessageEnvelope[] = [];
@@ -1627,6 +1638,7 @@ export function OfficeFloor() {
         if (mountIdRef.current !== mountId) return;
         if (!useStore.getState().agents.some((a) => a.id === agent.id)) {
           if (seatIndex != null) seatClaims.delete(seatIndex);
+          pendingAdds.delete(agent.id);
           return;
         }
         // Seat-indexed scale override (PRD 5장 「크기 비율」) — seatIndex lines up
@@ -1664,10 +1676,12 @@ export function OfficeFloor() {
           character.setCupSpot({ x: top.x * ts2 + 18, y: top.y * ts2 + 23 });
         }
         runtimes.set(agent.id, rt);
+        pendingAdds.delete(agent.id);
         applyState(agent, rt, true);
       };
 
       const removeCharacter = (id: string) => {
+        pendingAdds.delete(id); // in case it's removed while still mid-load
         const rt = runtimes.get(id);
         if (!rt) return;
         releaseBreak(rt);                // free any café seat it was holding
@@ -1826,8 +1840,12 @@ export function OfficeFloor() {
         }
         for (const agent of agents) {
           const rt = runtimes.get(agent.id);
-          if (!rt) void addCharacter(agent);
-          else {
+          if (!rt) {
+            if (!pendingAdds.has(agent.id)) {
+              pendingAdds.add(agent.id);
+              void addCharacter(agent);
+            }
+          } else {
             rt.character.setName(agent.name);
             applyState(agent, rt);
           }
