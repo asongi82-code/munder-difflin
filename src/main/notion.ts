@@ -18,9 +18,11 @@ export type NotionProp = {
   title?: Array<{ plain_text?: string }>;
   rich_text?: Array<{ plain_text?: string }>;
   select?: { name?: string } | null;
+  multi_select?: Array<{ name?: string }>;
   date?: { start?: string } | null;
   number?: number | null;
   checkbox?: boolean;
+  url?: string | null;
 };
 
 export function titleOf(page: NotionPage, name: string): string | null {
@@ -58,6 +60,47 @@ export function checkboxOf(page: NotionPage, name: string): boolean {
   const p = page.properties?.[name];
   return p?.type === 'checkbox' ? !!p.checkbox : false;
 }
+export function urlOf(page: NotionPage, name: string): string | null {
+  const p = page.properties?.[name];
+  return p?.type === 'url' && p.url ? p.url : null;
+}
+
+/** Plain-text display value of one property, regardless of its name — for a
+ *  generic read-only card viewer that doesn't know a database's property
+ *  names ahead of time (전체 카드 보기). Types it can't render as plain text
+ *  (relation, people, files, formula, rollup, …) return null rather than a
+ *  guess. An unchecked checkbox also returns null — "no" isn't information
+ *  worth a row in a generic property list. */
+function plainPropertyValue(p: NotionProp): string | null {
+  switch (p.type) {
+    case 'title': return (p.title ?? []).map((t) => t.plain_text ?? '').join('').trim() || null;
+    case 'rich_text': return (p.rich_text ?? []).map((t) => t.plain_text ?? '').join('').trim() || null;
+    case 'select': return p.select?.name ?? null;
+    case 'multi_select': {
+      const names = (p.multi_select ?? []).map((m) => m.name ?? '').filter(Boolean);
+      return names.length ? names.join(', ') : null;
+    }
+    case 'date': return p.date?.start ?? null;
+    case 'number': return typeof p.number === 'number' ? String(p.number) : null;
+    case 'checkbox': return p.checkbox ? '✓' : null;
+    case 'url': return p.url ?? null;
+    default: return null;
+  }
+}
+
+/** Every property of a page rendered as plain display strings, in the order
+ *  Notion returned them — for a generic read-only card viewer (전체 카드
+ *  보기) that shows whatever a database happens to have instead of hardcoding
+ *  property names. `제목`/`title` is included like any other property; the
+ *  caller surfaces it separately via `titleOf` if it wants it pulled out. */
+export function allPropertiesOf(page: NotionPage): Array<{ name: string; value: string }> {
+  const out: Array<{ name: string; value: string }> = [];
+  for (const [name, prop] of Object.entries(page.properties ?? {})) {
+    const value = plainPropertyValue(prop);
+    if (value != null) out.push({ name, value });
+  }
+  return out;
+}
 
 /** A page body block, as returned by the Notion blocks children API. Only the
  *  shapes the kaltela office actually reads (heading/paragraph/list/to_do rich
@@ -74,10 +117,37 @@ const HEADING_TYPES = new Set(['heading_1', 'heading_2', 'heading_3']);
 
 /** Plain text of whichever rich_text array a block type carries (heading_*,
  *  paragraph, bulleted/numbered_list_item, to_do, quote, callout) — '' for
- *  block types without one (image, divider, table, …). */
+ *  block types without one (image, divider, table, …). Use
+ *  `blockPlainTextDeep` instead when a native Notion `table` block may be
+ *  present (e.g. 최종 대본/연출 표) — this sync version can't fetch a table's
+ *  row children. */
 export function blockPlainText(block: NotionBlock): string {
   const body = block[block.type] as { rich_text?: Array<{ plain_text?: string }> } | undefined;
   return (body?.rich_text ?? []).map((t) => t.plain_text ?? '').join('').trim();
+}
+
+/** Like `blockPlainText`, but also renders a native Notion `table` block
+ *  (one the Notion UI/another MCP client created from a pasted markdown
+ *  table, as opposed to literal "|" characters typed into a paragraph) as a
+ *  pipe-delimited text table — one line per row, so callers that split
+ *  section text on "|" (looksLikeScriptTable, kaltelaDirector's table diff)
+ *  see the same shape regardless of which form the table was saved in. A
+ *  `table` block carries no rich_text of its own; its cells live on separate
+ *  `table_row` child blocks, so this needs its own children fetch. */
+export async function blockPlainTextDeep(block: NotionBlock): Promise<string> {
+  if (block.type !== 'table') return blockPlainText(block);
+  if (!block.has_children) return '';
+  const rows = await notionGetBlockChildren(block.id);
+  if (!rows) return '';
+  const lines: string[] = [];
+  for (const row of rows) {
+    if (row.type !== 'table_row') continue;
+    const tableRow = row as NotionBlock & { table_row?: { cells?: Array<Array<{ plain_text?: string }>>} };
+    const cells = tableRow.table_row?.cells ?? [];
+    const cellTexts = cells.map((cell) => (cell ?? []).map((t) => t.plain_text ?? '').join('').trim());
+    lines.push(`| ${cellTexts.join(' | ')} |`);
+  }
+  return lines.join('\n');
 }
 
 /** GET a page's properties (title/select/date/… — NOT its body blocks) through
@@ -111,10 +181,35 @@ export async function notionPageSectionText(pageId: string, headingText: string)
   for (let i = startIdx + 1; i < blocks.length; i++) {
     const b = blocks[i];
     if (HEADING_TYPES.has(b.type)) break;
-    const text = blockPlainText(b);
+    const text = await blockPlainTextDeep(b);
     if (text) lines.push(text);
   }
   return lines.join('\n');
+}
+
+/** Every top-level-heading section of a page's body, in document order — one
+ *  block fetch instead of the one-fetch-per-heading `notionPageSectionText`
+ *  does, for a generic read-only card viewer (전체 카드 보기) that shows
+ *  whichever sections a card happens to have instead of looking for named
+ *  ones. Content before the first heading is dropped (it belongs to no named
+ *  section, same as `notionPageSectionText`'s contract). Null only when the
+ *  block fetch itself failed; a page with no headings returns []. */
+export async function notionPageAllSections(pageId: string): Promise<Array<{ heading: string; text: string }> | null> {
+  const blocks = await notionGetBlockChildren(pageId);
+  if (!blocks) return null;
+  const sections: Array<{ heading: string; lines: string[] }> = [];
+  let current: { heading: string; lines: string[] } | null = null;
+  for (const b of blocks) {
+    if (HEADING_TYPES.has(b.type)) {
+      current = { heading: blockPlainText(b), lines: [] };
+      sections.push(current);
+      continue;
+    }
+    if (!current) continue;
+    const text = await blockPlainTextDeep(b);
+    if (text) current.lines.push(text);
+  }
+  return sections.map((s) => ({ heading: s.heading, text: s.lines.join('\n') }));
 }
 
 /** PATCH a page's properties through the stored 'notion' integration (state

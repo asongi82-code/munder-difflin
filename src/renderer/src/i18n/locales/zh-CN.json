@@ -389,8 +389,12 @@
     "tabs": {
       "terminal": "终端",
       "morning": "早报",
+      "board": "看板",
       "nextEpisode": "下一期",
       "performance": "成效检查",
+      "performanceOverview": "成效总览",
+      "director": "导演",
+      "adInquiry": "广告咨询",
       "floor": "监控",
       "tasks": "任务",
       "human": "问我",

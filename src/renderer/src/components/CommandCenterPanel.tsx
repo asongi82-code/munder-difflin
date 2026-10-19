@@ -18,8 +18,12 @@ import { terminalInstanceKey } from './terminalRecovery';
 import { Icon } from './Icon';
 import { MemoryGraphPanel } from './MemoryGraphPanel';
 import { MorningReportPanel } from './MorningReportPanel';
+import { BoardPanel } from './BoardPanel';
 import { NextEpisodePanel } from './NextEpisodePanel';
 import { PerformanceCheckPanel } from './PerformanceCheckPanel';
+import { PerformanceOverviewPanel } from './PerformanceOverviewPanel';
+import { DirectorPanel } from './DirectorPanel';
+import { AdInquiryPanel } from './AdInquiryPanel';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
 import { COMMAND_GROUPS } from '@shared/claudeCommands';
 import { roleForHiveSpawn } from '@shared/agentRole';
@@ -50,7 +54,7 @@ import { useRtl } from '@/i18n/useDirection';
 // Both the AskMe (#human) tab and the Triggers tab live here. Triggers replaced
 // the old Schedules tab: schedules are now one of four trigger types, and the
 // whole surface lives in ./triggers (see src/shared/triggers.ts for the contract).
-type CCTab = 'terminal' | 'morning' | 'nextEpisode' | 'performance' | 'floor' | 'tasks' | 'human' | 'triggers' | 'trigger-history'
+type CCTab = 'terminal' | 'morning' | 'board' | 'nextEpisode' | 'performance' | 'performanceOverview' | 'director' | 'adInquiry' | 'floor' | 'tasks' | 'human' | 'triggers' | 'trigger-history'
   | 'memory' | 'graph' | 'activity' | 'skills' | 'workers';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
@@ -72,8 +76,12 @@ interface GHIssue {
 const TABS: { key: CCTab; labelKey: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
   { key: 'terminal', labelKey: 'commandCenter.tabs.terminal', icon: 'terminal' },
   { key: 'morning', labelKey: 'commandCenter.tabs.morning', icon: 'bell' },
+  { key: 'board', labelKey: 'commandCenter.tabs.board', icon: 'folder' },
   { key: 'nextEpisode', labelKey: 'commandCenter.tabs.nextEpisode', icon: 'edit' },
   { key: 'performance', labelKey: 'commandCenter.tabs.performance', icon: 'ledger' },
+  { key: 'performanceOverview', labelKey: 'commandCenter.tabs.performanceOverview', icon: 'ledger' },
+  { key: 'director', labelKey: 'commandCenter.tabs.director', icon: 'image' },
+  { key: 'adInquiry', labelKey: 'commandCenter.tabs.adInquiry', icon: 'folder' },
   { key: 'floor', labelKey: 'commandCenter.tabs.floor', icon: 'mcp' },
   { key: 'tasks', labelKey: 'commandCenter.tabs.tasks', icon: 'check' },
   { key: 'human', labelKey: 'commandCenter.tabs.human', icon: 'bell' },
@@ -343,8 +351,12 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
           )
         )}
         {tab === 'morning' && <MorningReportPanel />}
+        {tab === 'board' && <BoardPanel />}
         {tab === 'nextEpisode' && <NextEpisodePanel />}
         {tab === 'performance' && <PerformanceCheckPanel />}
+        {tab === 'performanceOverview' && <PerformanceOverviewPanel />}
+        {tab === 'director' && <DirectorPanel />}
+        {tab === 'adInquiry' && <AdInquiryPanel />}
         {tab === 'floor' && <FloorTab seed={dispatchSeed} />}
         {tab === 'tasks' && <TasksKanban />}
         {tab === 'human' && <AskMeTab />}

@@ -1014,14 +1014,30 @@ export class HiveManager {
       const settingsPath = join(dir, 'settings.json');
       this.writeJson(settingsPath, this.hookSettings(
         shim,
-        meta.cwd,
-        opts.mcpDefaults,
         opts.theme,
         this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs),
-        meta.mcpServers,
         meta.mcpDenyTools
       ));
       args.push('--settings', settingsPath);
+      // `--settings` has NO `mcpServers` key (verified against the current CLI
+      // settings-reference — it only carries allow/deny lists like
+      // `enabledMcpjsonServers`). A server block placed there is silently
+      // ignored: `claude --settings <file>` spawned fine and `/mcp` showed only
+      // the account's own global (claude.ai) connectors, none of the ones below.
+      // The actual mechanism is `--mcp-config <file>` (https://code.claude.com/
+      // docs/en/mcp.md), which takes a file in the same shape as a project
+      // `.mcp.json` and is ADDITIVE — same-name collisions favor this file, but
+      // it doesn't replace other scopes. Deliberately NOT pairing this with
+      // `--strict-mcp-config`: that flag makes this file the ONLY server
+      // source, which would cut off whatever the signed-in account already has
+      // connected globally (e.g. a working Notion/Metricool claude.ai
+      // connector) — worse than today for any agent relying on one of those.
+      const mcpServers = this.buildDefaultMcpServers(meta.cwd, opts.mcpDefaults, meta.mcpServers);
+      if (Object.keys(mcpServers).length) {
+        const mcpConfigPath = join(dir, 'mcp.json');
+        this.writeJson(mcpConfigPath, { mcpServers });
+        args.push('--mcp-config', mcpConfigPath);
+      }
     }
     return { args, env };
   }
@@ -1264,11 +1280,8 @@ export class HiveManager {
 
   private hookSettings(
     shim: string,
-    cwd: string,
-    cfg: McpDefaultsMap,
     theme?: 'light' | 'dark',
     writableDirs: string[] = [],
-    mcpAllowIds?: string[],
     mcpDenyTools?: string[]
   ): unknown {
     // Bundled node, NOT bare `node` — see nodeLauncherPath(). Claude runs each of
@@ -1278,7 +1291,6 @@ export class HiveManager {
       ...(matcher ? { matcher } : {}),
       hooks: [{ type: 'command', command: cmd }]
     });
-    const mcpServers = this.buildDefaultMcpServers(cwd, cfg, mcpAllowIds);
     const deny = (mcpDenyTools ?? []).filter((t) => typeof t === 'string' && t.length > 0);
     return {
       // Match the TUI's truecolor palette to the harness terminal theme —
@@ -1293,11 +1305,6 @@ export class HiveManager {
       // listens. The terminal reports the current theme the moment the CLI enables
       // 2031, so startup still matches without pinning anything.
       ...(theme ? { theme: 'auto' } : {}),
-      // W3 — default skills/MCP bundle. Written into the PER-SESSION settings file
-      // only (never ~/.claude), so the user's own MCP servers are never clobbered;
-      // Claude merges this additively. Omitted entirely when empty so a settings
-      // file with no enabled servers is unchanged from before.
-      ...(Object.keys(mcpServers).length ? { mcpServers } : {}),
       // The status line gets the session status JSON after every response —
       // including context_window.{total_input_tokens,context_window_size},
       // the only clean programmatic source for the session's REAL context

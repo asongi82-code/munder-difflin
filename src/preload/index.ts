@@ -337,6 +337,8 @@ export interface HarnessConfig {
   kaltelaNotionEpisodeBoardId?: string;
   /** 「인스타 팔로워 기록」 노션 DB id. */
   kaltelaNotionFollowerDbId?: string;
+  /** 「광고 문의 기록」 노션 DB id. */
+  kaltelaNotionAdInquiryDbId?: string;
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn. API KEYS are NOT stored here —
    *  they live write-only in the secret broker. */
@@ -800,6 +802,33 @@ const api = {
     cardId: string,
     input: { nonFollowerRatio?: number; profileVisits?: number; reelsFollows?: number }
   ): Promise<unknown> => ipcRenderer.invoke('kaltela:submitPerformanceCheck', cardId, input),
+  /** 연출 표 작업이 필요한 대본확정 카드 목록 (PRD 10번, P1-1, 4-5 화면). */
+  getKaltelaDirectorQueue: (opts?: { force?: boolean }): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:directorQueue', opts),
+  /** 카드 하나의 "최종 대본"/"연출 표" 본문 섹션을 그대로 읽어 온다(쓰지 않음). */
+  getKaltelaDirectorCardDetail: (cardId: string): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:directorCardDetail', cardId),
+  /** "연출 표"가 채워진 뒤 대표가 확인하는 마지막 버튼 — 상태를 작화로 바꾼다. */
+  confirmKaltelaDirectorTable: (cardId: string): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:confirmDirectorTable', cardId),
+  /** 광고 문의 기록 목록 (PRD 11번, P1-2, 4-7 화면). */
+  getKaltelaAdInquiries: (opts?: { force?: boolean }): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:adInquiries', opts),
+  /** 문의 하나의 "답장 초안" 본문 섹션을 그대로 읽어 온다(쓰지 않음). */
+  getKaltelaAdInquiryDraft: (inquiryId: string): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:adInquiryDraft', inquiryId),
+  /** 「칼테라 에피소드 보드」 전체를 상태별로 묶어 돌려준다 — "카드 전체를 보는
+   *  화면"(시시오피스 스타일). */
+  getKaltelaBoardOverview: (opts?: { force?: boolean }): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:boardOverview', opts),
+  /** 카드 하나의 속성·본문 섹션을 전부 그대로 읽어 온다(쓰지 않음) — 클릭했을
+   *  때 노션 브라우저로 나가지 않고 앱 안에서 보여주기 위함. */
+  getKaltelaCardDetail: (cardId: string): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:cardDetail', cardId),
+  /** 성과분석 전체 보기(시시오피스 스타일, PRD 밖 추가 요청) — 팔로워 추이
+   *  (월별·연별)와 조회수 높은 게시물 TOP10. 전부 읽기만 한다. */
+  getKaltelaPerformanceOverview: (opts?: { force?: boolean }): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:performanceOverview', opts),
   hiveLog: (n?: number): Promise<unknown[]> => ipcRenderer.invoke('hive:log', n ?? 200),
   hiveMemory: (id: string): Promise<string> => ipcRenderer.invoke('hive:memory', id),
   hiveInbox: (id: string): Promise<HiveMessage[]> => ipcRenderer.invoke('hive:inbox', id),

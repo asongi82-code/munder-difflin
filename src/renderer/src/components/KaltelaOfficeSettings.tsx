@@ -40,6 +40,7 @@ export function KaltelaOfficeSettings({ config }: { config: HarnessConfig }) {
   );
   const [episodeBoardId, setEpisodeBoardId] = useState(config.kaltelaNotionEpisodeBoardId ?? '');
   const [followerDbId, setFollowerDbId] = useState(config.kaltelaNotionFollowerDbId ?? '');
+  const [adInquiryDbId, setAdInquiryDbId] = useState(config.kaltelaNotionAdInquiryDbId ?? '');
   const [note, setNote] = useState('');
 
   const flash = (msg: string) => { setNote(msg); setTimeout(() => setNote(''), 1800); };
@@ -56,7 +57,7 @@ export function KaltelaOfficeSettings({ config }: { config: HarnessConfig }) {
     try { await window.cth.updateConfig({ kaltelaStageNames: next }); flash('저장됨'); }
     catch { flash('저장 실패'); }
   };
-  const saveDbId = async (field: 'kaltelaNotionEpisodeBoardId' | 'kaltelaNotionFollowerDbId', value: string) => {
+  const saveDbId = async (field: 'kaltelaNotionEpisodeBoardId' | 'kaltelaNotionFollowerDbId' | 'kaltelaNotionAdInquiryDbId', value: string) => {
     try { await window.cth.updateConfig({ [field]: value.trim() || undefined }); flash('저장됨'); }
     catch { flash('저장 실패'); }
   };
@@ -133,6 +134,16 @@ export function KaltelaOfficeSettings({ config }: { config: HarnessConfig }) {
               placeholder="노션 DB URL의 32자리 id"
               onChange={(e) => setFollowerDbId(e.target.value)}
               onBlur={(e) => { void saveDbId('kaltelaNotionFollowerDbId', e.target.value); }}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>광고 문의 기록 DB id</label>
+            <input
+              style={inputStyle}
+              value={adInquiryDbId}
+              placeholder="노션 DB URL의 32자리 id"
+              onChange={(e) => setAdInquiryDbId(e.target.value)}
+              onBlur={(e) => { void saveDbId('kaltelaNotionAdInquiryDbId', e.target.value); }}
             />
           </div>
         </div>

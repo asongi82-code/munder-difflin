@@ -332,6 +332,8 @@ export interface HarnessConfig {
   kaltelaNotionEpisodeBoardId?: string;
   /** 「인스타 팔로워 기록」 노션 DB id — 대표 모니터의 팔로워 수를 읽어온다. */
   kaltelaNotionFollowerDbId?: string;
+  /** 「광고 문의 기록」 노션 DB id — 영업사원의 광고 문의 화면(4-7)이 읽어온다. */
+  kaltelaNotionAdInquiryDbId?: string;
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn (config-injection or proxy
    *  upstream). API KEYS are NOT stored here — they live write-only in the secret

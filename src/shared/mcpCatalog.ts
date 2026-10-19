@@ -182,13 +182,27 @@ export const MCP_CATALOG: McpCatalogEntry[] = [
   {
     id: 'gmail-readonly',
     label: 'Gmail (읽기 전용)',
-    description: '"칼테라 광고" 라벨 메일만 읽기. Requires a Google OAuth token. The server itself can send/delete — pair this id with `mcpDenyTools` (e.g. deny `mcp__munder-gmail-readonly__send_message`) on the hire so only reading is actually possible.',
-    // Same underlying package as 'email-calendar'; kept as a separate catalog id
-    // so a hire can request Gmail without also getting Calendar, and so the
-    // description/consent UI is specific to the read-only intent.
-    // TODO-verify provider package (Gmail/Google Calendar assumed) and confirm it
-    // can be scoped to one label via GMAIL_LABEL_NAME or an equivalent filter.
-    spec: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-gsuite'], env: { GOOGLE_OAUTH_TOKEN: '', GMAIL_LABEL_NAME: '' } },
+    description: '"칼테라 광고" 라벨 메일만 읽기. Requests ONLY the gmail.readonly OAuth scope — Google itself rejects any send/modify/delete call for this token, regardless of what the agent tries (stronger than app-side tool denial). One-time local setup: download the OAuth Desktop client\'s credentials.json from Google Cloud Console to `%USERPROFILE%\\.gmail-mcp\\credentials.json`, then run `npx -y @symbolstar/gmail-mcp auth` once. No env vars needed here — the server reads its own stored token file at spawn.',
+    // 2026-10-19(v0.2, PRD 「8. 개발 순서」 11번): 두 번 교체됨.
+    //   1차: @modelcontextprotocol/server-gsuite — npm에 존재하지 않는 패키지였다(실제
+    //        조회로 확인).
+    //   2차: @jdickey1/mcp-gmail — gmail.readonly 스코프에 실제 패키지였지만, 실제
+    //        사용 중 발견한 버그로 교체함: 검색 결과가 0건이면 정상 작동하는데 1건이라도
+    //        있으면 그 호출 자체가 실패한다(영업사원 하이브 에이전트가 실제 라벨로
+    //        재현해 확인). Windows 브라우저 열기도 `&` 포함 URL을 셸 문자열로 넘겨
+    //        끊어지는 버그가 있었다(별도로 겪고 고침).
+    // 지금: @symbolstar/gmail-mcp(https://github.com/SymbolStar/gmail-mcp) — 소스를
+    // 직접 받아 확인함(공개 저장소 없다고 떴던 npm 레지스트리 메타데이터와 달리
+    // package.json엔 저장소 URL이 있었다). `GMAIL_SCOPES = ["…/auth/gmail.readonly"]`
+    // 하나만 요청하고, 공식 `googleapis` 클라이언트로 구현이 단순·안전하다. 브라우저
+    // 여는 코드도 `execFile(cmd, ['/c','start','',url])`로 인자를 분리해서 넘겨
+    // Windows `&` 버그가 없다. 도구 네 가지: list_emails / get_email / search_emails
+    // (Gmail 검색 문법 그대로 전달, label: 연산자 포함) / list_labels. get_thread는
+    // 없다 — 같은 스레드 묶기는 search_emails가 돌려주는 threadId로 영업사원이 직접
+    // 판단한다(employees/sales/CLAUDE.md 참고). 인증은 env가 아니라 고정 파일
+    // 경로(`~/.gmail-mcp/credentials.json`, `~/.gmail-mcp/token.json`)만 본다 — 이
+    // 서버 스펙엔 env가 필요 없다.
+    spec: { command: 'npx', args: ['-y', '@symbolstar/gmail-mcp'] },
     tier: 'secret',
     defaultEnabled: false
   }

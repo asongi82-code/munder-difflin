@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PixelButton } from './PixelButton';
+import { KaltelaCardDetailModal } from './KaltelaCardDetailModal';
 import { useStore } from '@/store/store';
 
 /**
@@ -38,19 +39,15 @@ interface KaltelaMorningReportLike {
 
 const POLL_MS = 60_000;
 
-function openCard(card: KaltelaReportCardLike): void {
-  if (card.url) void window.cth.openExternal(card.url);
-}
-
-function CardRow({ card, accent }: { card: KaltelaReportCardLike; accent?: boolean }) {
+function CardRow({ card, accent, onOpen }: { card: KaltelaReportCardLike; accent?: boolean; onOpen: (id: string) => void }) {
   return (
     <button
-      onClick={() => openCard(card)}
-      disabled={!card.url}
-      title={card.url ? '노션에서 열기' : undefined}
+      onClick={() => onOpen(card.id)}
+      disabled={!card.id}
+      title="카드 보기"
       style={{
         display: 'flex', flexDirection: 'column', gap: 1, width: '100%', textAlign: 'left',
-        padding: '5px 7px', marginBottom: 4, border: 'none', cursor: card.url ? 'pointer' : 'default',
+        padding: '5px 7px', marginBottom: 4, border: 'none', cursor: card.id ? 'pointer' : 'default',
         background: accent ? 'var(--cth-coral-light)' : 'var(--cth-paper-100)',
         boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
       }}
@@ -87,6 +84,7 @@ export function MorningReportPanel() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [note, setNote] = useState('');
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async (force = false) => {
@@ -117,6 +115,19 @@ export function MorningReportPanel() {
       'human'
     );
     flash(res.ok ? `${researcher.name}에게 요청을 보냈습니다` : `요청 실패: ${res.error ?? '?'}`);
+  };
+
+  const sales = agents.find((a) => a.character === 'sales');
+  const requestMailCheck = async () => {
+    if (!sales) { flash('영업사원이 아직 고용되지 않았습니다'); return; }
+    const res = await window.cth.hiveSend(
+      {
+        to: sales.id, act: 'request', subject: '광고 메일 확인 요청',
+        body: 'PRD 2장 P1-2 작동 방식 1대로 지메일 "칼테라 광고" 라벨을 확인하고, 새 문의가 있으면 「광고 문의 기록」에 기록한 뒤 첫 답장 초안을 작성해 주세요.'
+      },
+      'human'
+    );
+    flash(res.ok ? `${sales.name}에게 요청을 보냈습니다` : `요청 실패: ${res.error ?? '?'}`);
   };
 
   const runCheck = async () => { setRefreshing(true); await load(true); flash('다시 불러왔습니다'); };
@@ -160,7 +171,7 @@ export function MorningReportPanel() {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 10, background: 'var(--cth-paper-200)' }}>
         {report.adDisclosureWarnings.length > 0 && (
           <ReportSection title="⚠ 광고 화 발행 전 확인" count={report.adDisclosureWarnings.length}>
-            {report.adDisclosureWarnings.map((c) => <CardRow key={c.id} card={c} accent />)}
+            {report.adDisclosureWarnings.map((c) => <CardRow key={c.id} card={c} accent onOpen={setOpenCardId} />)}
           </ReportSection>
         )}
 
@@ -176,34 +187,34 @@ export function MorningReportPanel() {
 
         {(report.checksToday.length > 0 || report.checksUpcoming29.length > 0) && (
           <ReportSection title="오늘 성과 체크" count={report.checksToday.length}>
-            {report.checksToday.map((c) => <CardRow key={`${c.id}-today`} card={c} />)}
-            {report.checksUpcoming29.map((c) => <CardRow key={`${c.id}-soon`} card={c} />)}
+            {report.checksToday.map((c) => <CardRow key={`${c.id}-today`} card={c} onOpen={setOpenCardId} />)}
+            {report.checksUpcoming29.map((c) => <CardRow key={`${c.id}-soon`} card={c} onOpen={setOpenCardId} />)}
           </ReportSection>
         )}
 
         {report.overdueWriting.length > 0 && (
           <ReportSection title="대본작성 지연 (3일 초과)" count={report.overdueWriting.length}>
-            {report.overdueWriting.map((c) => <CardRow key={c.id} card={c} accent />)}
+            {report.overdueWriting.map((c) => <CardRow key={c.id} card={c} accent onOpen={setOpenCardId} />)}
           </ReportSection>
         )}
 
         <ReportSection title="대본확정" count={report.confirmedCards.length}>
           {report.confirmedCards.length === 0 && <Muted>없음</Muted>}
-          {report.confirmedCards.map((c) => <CardRow key={c.id} card={c} />)}
+          {report.confirmedCards.map((c) => <CardRow key={c.id} card={c} onOpen={setOpenCardId} />)}
         </ReportSection>
 
         <ReportSection title="대본작성 중 (클로드 채팅)" count={report.writingCards.length}>
           {report.writingCards.length === 0 && <Muted>없음</Muted>}
-          {report.writingCards.map((c) => <CardRow key={c.id} card={c} />)}
+          {report.writingCards.map((c) => <CardRow key={c.id} card={c} onOpen={setOpenCardId} />)}
         </ReportSection>
 
         <ReportSection title="작화 대기" count={report.renderingCards.length}>
           {report.renderingCards.length === 0 && <Muted>없음</Muted>}
-          {report.renderingCards.map((c) => <CardRow key={c.id} card={c} />)}
+          {report.renderingCards.map((c) => <CardRow key={c.id} card={c} onOpen={setOpenCardId} />)}
         </ReportSection>
 
         <ReportSection title="영업 문의 확인 필요">
-          <Muted>지메일 연동 전 (「8. 개발 순서」 11번 예정)</Muted>
+          <Muted>하단 [메일 확인 실행]으로 영업사원에게 요청하세요 — 애매한 문의는 영업사원이 직접 하이브 메시지로 알려줍니다.</Muted>
         </ReportSection>
       </div>
 
@@ -221,10 +232,16 @@ export function MorningReportPanel() {
           {refreshing ? '확인 중…' : '성과 체크 실행'}
         </PixelButton>
         <PixelButton
-          variant="secondary" size="sm" disabled
-          title="지메일 연동 전 (「8. 개발 순서」 11번 예정)"
+          variant="secondary" size="sm"
+          onClick={() => void requestMailCheck()}
+          disabled={!sales}
+          title={sales ? undefined : '영업사원이 아직 고용되지 않았습니다'}
         >메일 확인 실행</PixelButton>
       </div>
+
+      {openCardId && (
+        <KaltelaCardDetailModal cardId={openCardId} onClose={() => setOpenCardId(null)} />
+      )}
     </div>
   );
 }

@@ -389,8 +389,12 @@
     "tabs": {
       "terminal": "الطرفية",
       "morning": "التقرير الصباحي",
+      "board": "اللوحة",
       "nextEpisode": "الحلقة التالية",
       "performance": "فحص الأداء",
+      "performanceOverview": "نظرة عامة على الأداء",
+      "director": "الإخراج",
+      "adInquiry": "استفسارات الإعلانات",
       "floor": "المراقبة",
       "tasks": "المهام",
       "human": "اسألني",

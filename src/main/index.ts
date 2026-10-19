@@ -65,6 +65,10 @@ import { getKaltelaOfficeSnapshot } from './kaltelaOffice';
 import { getKaltelaMorningReport } from './kaltelaMorningReport';
 import { getKaltelaNextPicks, selectKaltelaEpisode } from './kaltelaNextEpisode';
 import { getKaltela7DayChecks, submitKaltela7DayCheck } from './kaltelaPerformance';
+import { getKaltelaDirectorQueue, getKaltelaDirectorCardDetail, confirmKaltelaDirectorTable } from './kaltelaDirector';
+import { getKaltelaAdInquiries, getKaltelaAdInquiryDraft } from './kaltelaSales';
+import { getKaltelaBoardOverview, getKaltelaCardDetail } from './kaltelaBoard';
+import { getKaltelaPerformanceOverview } from './kaltelaPerformanceOverview';
 import { RosterStore } from './roster';
 import { buildWorkerLaunch } from './workerLaunch';
 import { ControlRegistry } from './control';
@@ -3235,6 +3239,56 @@ ipcMain.handle('kaltela:submitPerformanceCheck', (_evt, cardId: unknown, input: 
   typeof cardId === 'string' && cardId
     ? submitKaltela7DayCheck(cardId, (input ?? {}) as Parameters<typeof submitKaltela7DayCheck>[1])
     : Promise.resolve({ ok: false, error: '카드 id가 없습니다', savedFields: [], skippedFields: [] })
+);
+
+// ─── IPC: kaltela 연출 담당 (PRD.md 「8. 개발 순서」 10번, P1-1) ─────────────────
+// 화면·연출 칸을 채우는 것(연출 판단)과 "연출 표" 섹션을 쓰는 것은 실제 연출
+// 담당 하이브 에이전트가 자기 노션 MCP로 한다 — renderer가 하이브 메시지로
+// 요청한다(kaltelaDirector.ts 모듈 설명 참고). 이 프로세스는 대기열 읽기,
+// 카드 본문 읽기, "연출 표가 비어 있지 않음"을 확인한 뒤 상태를 작화로
+// 바꾸는 것만 맡는다.
+ipcMain.handle('kaltela:directorQueue', (_evt, opts?: { force?: boolean }) => getKaltelaDirectorQueue(opts ?? {}));
+ipcMain.handle('kaltela:directorCardDetail', (_evt, cardId: unknown) =>
+  typeof cardId === 'string' && cardId
+    ? getKaltelaDirectorCardDetail(cardId)
+    : Promise.resolve({ ok: false, error: '카드 id가 없습니다' })
+);
+ipcMain.handle('kaltela:confirmDirectorTable', (_evt, cardId: unknown) =>
+  typeof cardId === 'string' && cardId
+    ? confirmKaltelaDirectorTable(cardId)
+    : Promise.resolve({ ok: false, error: '카드 id가 없습니다' })
+);
+
+// ─── IPC: kaltela 영업사원 (PRD.md 「8. 개발 순서」 11번, P1-2) ───────────────────
+// 메일/DM을 읽고 진짜 광고 문의인지 판단하는 것, 문의 카드를 만드는 것, 답장
+// 초안을 쓰는 것은 전부 실제 영업사원 하이브 에이전트가 한다(지메일은 그
+// 에이전트의 읽기 전용 MCP로만 접근 — 이 프로세스는 지메일을 직접 읽지
+// 않는다). 이 프로세스는 「광고 문의 기록」 DB와 "답장 초안" 본문 섹션을
+// 그대로 읽는 것만 맡는다 — kaltelaSales.ts 모듈 설명 참고.
+ipcMain.handle('kaltela:adInquiries', (_evt, opts?: { force?: boolean }) => getKaltelaAdInquiries(opts ?? {}));
+ipcMain.handle('kaltela:adInquiryDraft', (_evt, inquiryId: unknown) =>
+  typeof inquiryId === 'string' && inquiryId
+    ? getKaltelaAdInquiryDraft(inquiryId)
+    : Promise.resolve({ ok: false, error: '문의 id가 없습니다', draft: null })
+);
+
+// ─── IPC: kaltela 카드 전체 보기 (PRD.md 「0. 문서 정보」가 12번 전에 추가로
+// 계획해 둔 "카드 전체를 보는 화면", 시시오피스 스타일) ──────────────────────
+// 「칼테라 에피소드 보드」를 상태별로 묶어 한 화면에서 보고, 카드 하나를 열어도
+// 노션 브라우저로 나가지 않고 속성·본문을 그대로 앱 안에서 읽는다 — 전부
+// 읽기만 한다. kaltelaBoard.ts 모듈 설명 참고.
+ipcMain.handle('kaltela:boardOverview', (_evt, opts?: { force?: boolean }) => getKaltelaBoardOverview(opts ?? {}));
+ipcMain.handle('kaltela:cardDetail', (_evt, cardId: unknown) =>
+  typeof cardId === 'string' && cardId
+    ? getKaltelaCardDetail(cardId)
+    : Promise.resolve({ ok: false, error: '카드 id가 없습니다' })
+);
+
+// ─── IPC: kaltela 성과분석 전체 보기 (PRD 밖 추가 요청, 시시오피스 스타일) ───────
+// 팔로워 추이(월별·연별)와 조회수 높은 게시물 TOP10 — 전부 읽기만 한다.
+// kaltelaPerformanceOverview.ts 모듈 설명 참고.
+ipcMain.handle('kaltela:performanceOverview', (_evt, opts?: { force?: boolean }) =>
+  getKaltelaPerformanceOverview(opts ?? {})
 );
 
 // ─── IPC: config ────────────────────────────────────────────────────────────
