@@ -171,6 +171,12 @@ export interface ThemeConfig {
    *  Character.ts's CharacterOptions.bubbleHeadroom. Omitted = 0 (office,
    *  brooklyn99, …, whose ~32px-tall native frame ThoughtBubble is tuned for). */
   castBubbleHeadroom?: number;
+  /** Fixed character → spawn-point-name seat assignment, for a theme whose
+   *  desks are each labeled for one specific role (kaltela's nameplates +
+   *  PRD 4-1 자리 배치 table) rather than generic interchangeable desks. A
+   *  theme that omits this (office, brooklyn99, …) falls back to claiming the
+   *  next free seat in `primarySeatNames` order regardless of character. */
+  seatForCharacter?: Record<string, string>;
 }
 
 /** The existing office, expressed as a theme. Values are copied verbatim from
@@ -336,9 +342,22 @@ export const KALTELA_THEME: ThemeConfig = {
   tilesets: [],
   backgroundImage: { url: kaltelaBgUrl, width: 960, height: 640 },
   // Seat 0 = desk-ceo (편집장, replaces Michael/god — see PRD 7장). pc-1..pc-5
-  // are claimed in hire order; PRD recommends 리서처 → 스토리 작가 → 성과 분석가 →
-  // 영업사원 → 연출 담당 for pc-1..pc-5 (매칭은 느슨함, 자리 자체는 상호교환 가능).
+  // are fixed per role via seatForCharacter below — build_kaltela_map.cjs's
+  // own spawn-point coordinates (÷2 back to 1x) match PRD 4-1's per-role desk
+  // coordinates exactly (pc-1=54,171=리서처, pc-2=143,171=스토리 작가,
+  // pc-3=314,171=성과 분석가, pc-4=400,171=영업사원, pc-5=54,253=연출 담당), and each
+  // desk's nameplate (「8. 개발 순서」 6번) is drawn at that same fixed position —
+  // so the character sitting there must match, not just claim whatever seat is
+  // free next (that used to cause a hired-later employee to sit under another
+  // role's nameplate).
   primarySeatNames: ['desk-ceo', 'pc-1', 'pc-2', 'pc-3', 'pc-4', 'pc-5'],
+  seatForCharacter: {
+    researcher: 'pc-1',
+    writer: 'pc-2',
+    analyst: 'pc-3',
+    sales: 'pc-4',
+    director: 'pc-5'
+  },
   cafeSeatNames: [],
   cafeStands: [],
   // No coffee economy in this office. maxCups: 0 means the tray's cup-drawing

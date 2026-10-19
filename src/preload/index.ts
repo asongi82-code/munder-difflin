@@ -789,6 +789,17 @@ const api = {
    *  조립해 돌려준다 (PRD 8번, P0-2, 스토리 작가 ①). */
   selectKaltelaEpisode: (cardId: string): Promise<unknown> =>
     ipcRenderer.invoke('kaltela:selectEpisode', cardId),
+  /** 오늘 7일 체크 대상 카드 목록 (PRD 9번, P0-3, 4-6 화면). 비팔로워 비율/
+   *  프로필 방문이 둘 다 이미 채워진 카드는 자연히 목록에서 빠진다. */
+  getKaltela7DayChecks: (opts?: { force?: boolean }): Promise<unknown> =>
+    ipcRenderer.invoke('kaltela:performanceChecks', opts),
+  /** 비팔로워 비율/프로필 방문/(릴스일 때만) 팔로우를 쓴다 — 이미 값이 있는
+   *  칸은 건너뛴다. 댓글 원문 저장·정리는 이 호출이 하지 않는다(PRD 9번
+   *  모듈 설명 참고) — 저장 성공 후 renderer가 하이브 메시지로 넘긴다. */
+  submitKaltela7DayCheck: (
+    cardId: string,
+    input: { nonFollowerRatio?: number; profileVisits?: number; reelsFollows?: number }
+  ): Promise<unknown> => ipcRenderer.invoke('kaltela:submitPerformanceCheck', cardId, input),
   hiveLog: (n?: number): Promise<unknown[]> => ipcRenderer.invoke('hive:log', n ?? 200),
   hiveMemory: (id: string): Promise<string> => ipcRenderer.invoke('hive:memory', id),
   hiveInbox: (id: string): Promise<HiveMessage[]> => ipcRenderer.invoke('hive:inbox', id),

@@ -646,10 +646,24 @@ export function OfficeFloor() {
       if (waitTiles.length === 0) waitTiles.push(entrance);
 
       // Seat 0 is desk-ceo — "Michael's room" — reserved for the god agent.
-      // All other workers claim seats from 1 onward.
+      // All other workers claim seats from 1 onward — UNLESS the theme pins
+      // specific roles to specific desks (theme.seatForCharacter, e.g. kaltela's
+      // per-role nameplates), in which case that agent's own seat is tried
+      // first. Falls back to "next free seat" when there's no mapping for this
+      // character, the mapped seat is already taken (shouldn't normally happen
+      // — one hire per role), or the theme doesn't define seatForCharacter at
+      // all (office, brooklyn99, …).
       const GOD_SEAT = 0;
       const claimSeat = (agent: Agent): number | null => {
         if (agent.isGod) { seatClaims.add(GOD_SEAT); return GOD_SEAT; }
+        const preferredSeatName = theme.seatForCharacter?.[agent.character];
+        if (preferredSeatName) {
+          const idx = theme.primarySeatNames.indexOf(preferredSeatName);
+          if (idx > 0 && idx < seatTiles.length && !seatClaims.has(idx)) {
+            seatClaims.add(idx);
+            return idx;
+          }
+        }
         for (let i = 1; i < seatTiles.length; i++) {
           if (!seatClaims.has(i)) { seatClaims.add(i); return i; }
         }

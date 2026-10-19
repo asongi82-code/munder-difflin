@@ -64,6 +64,7 @@ import { validateBaseUrl, buildAuthHeaders, resolveUpstreamUrl, secretRefFor, IN
 import { getKaltelaOfficeSnapshot } from './kaltelaOffice';
 import { getKaltelaMorningReport } from './kaltelaMorningReport';
 import { getKaltelaNextPicks, selectKaltelaEpisode } from './kaltelaNextEpisode';
+import { getKaltela7DayChecks, submitKaltela7DayCheck } from './kaltelaPerformance';
 import { RosterStore } from './roster';
 import { buildWorkerLaunch } from './workerLaunch';
 import { ControlRegistry } from './control';
@@ -3222,6 +3223,18 @@ ipcMain.handle('kaltela:selectEpisode', (_evt, cardId: unknown) =>
   typeof cardId === 'string' && cardId
     ? selectKaltelaEpisode(cardId)
     : Promise.resolve({ ok: false, error: '카드 id가 없습니다' })
+);
+
+// ─── IPC: kaltela 성과 분석가 7일 체크 입력 (PRD.md 「8. 개발 순서」 9번, P0-3) ────
+// 비팔로워 비율/프로필 방문/(릴스일 때만) 팔로우만 기계적으로 쓴다(이미 값이
+// 있는 칸은 건너뜀). Metricool 자동 숫자와 댓글 원문 저장·정리는 renderer가
+// 저장 성공 후 성과 분석가 하이브 에이전트에게 하이브 메시지로 넘긴다 —
+// kaltelaPerformance.ts 모듈 설명 참고.
+ipcMain.handle('kaltela:performanceChecks', (_evt, opts?: { force?: boolean }) => getKaltela7DayChecks(opts ?? {}));
+ipcMain.handle('kaltela:submitPerformanceCheck', (_evt, cardId: unknown, input: unknown) =>
+  typeof cardId === 'string' && cardId
+    ? submitKaltela7DayCheck(cardId, (input ?? {}) as Parameters<typeof submitKaltela7DayCheck>[1])
+    : Promise.resolve({ ok: false, error: '카드 id가 없습니다', savedFields: [], skippedFields: [] })
 );
 
 // ─── IPC: config ────────────────────────────────────────────────────────────
